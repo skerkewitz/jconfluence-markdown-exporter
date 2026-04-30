@@ -68,6 +68,20 @@ mvn test                # tests only
    java --enable-native-access=ALL-UNNAMED -jar target/jcme-0.1.0-SNAPSHOT.jar --help
    ```
 
+#### Repo-root wrappers (`jcmew.sh` / `jcmew.bat`)
+
+If you don't want to put `target/appassembler/bin/` on `PATH`, the repo ships small
+wrappers — same idea as `gradlew`/`mvnw`:
+
+```bash
+./jcmew.sh --help                       # Unix
+jcmew.bat --help                        # Windows
+```
+
+Both find `target/jcme-*.jar`, pass `--enable-native-access=ALL-UNNAMED` to the JVM,
+and forward any remaining arguments. They print a friendly error if you haven't run
+`mvn package` yet.
+
 > The two build files are kept in sync by hand. If you change a dependency version,
 > update both [build.gradle.kts](build.gradle.kts) and [pom.xml](pom.xml).
 
@@ -77,6 +91,39 @@ A real ahead-of-time-compiled native executable (no JVM at runtime) isn't built 
 the box: it requires reflection / resource hints for Jackson, jsoup, jline, picocli, and
 the SLF4J service-loader files, plus a working GraalVM toolchain. This is on the roadmap
 but not wired up yet.
+
+## Logging
+
+All log output is written to **stderr**. The default level is **INFO**, which prints
+high-level progress (URL resolution, page fetches, attachment downloads, file writes).
+
+Bump the level with either of:
+
+```sh
+jcme config set export.log_level=DEBUG          # persists to config file
+JCME_EXPORT__LOG_LEVEL=DEBUG jcme pages …       # one-off run
+```
+
+`DEBUG` adds:
+
+- Per-HTTP-request URLs with elapsed time and response size
+- Cache hit/miss for spaces and pages
+- Per-batch paging info for attachments and descendants
+- Per-worker thread tags for parallel exports
+
+If a run appears to hang, the most likely culprits visible in DEBUG are:
+
+- An HTTP request that hasn't returned within the configured `connection_config.timeout`
+  (default 30 s) — you'll see `HTTP GET https://… (attempt N/M, timeout 30s)` with no
+  follow-up "returned in X ms" line.
+- A retry loop on a flaky endpoint — look for `HTTP 503 from … — retrying in Ns`.
+- The cloud-id auto-probe at `https://*.atlassian.net/_edge/tenant_info` (5 s cap).
+
+To redirect logs to a file, just use shell redirection:
+
+```sh
+jcme pages …  2> jcme.log
+```
 
 ## First-run setup
 

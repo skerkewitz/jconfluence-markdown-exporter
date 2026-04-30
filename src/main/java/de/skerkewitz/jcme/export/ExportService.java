@@ -55,7 +55,9 @@ public final class ExportService {
     public ExportStats exportPages(List<String> urls) {
         AppConfig settings = configStore.loadEffective();
         Path outputRoot = resolveOutputRoot(settings);
+        LOG.info("Output root: {}", outputRoot.toAbsolutePath());
         LockfileManager lockfile = newLockfile(settings, outputRoot);
+        LOG.info("Resolving {} page URL(s) before export…", urls.size());
 
         Set<String> seenBaseUrls = new LinkedHashSet<>();
         List<Page> pages = new ArrayList<>();
@@ -64,10 +66,13 @@ public final class ExportService {
             pages.add(page);
             seenBaseUrls.add(page.baseUrl());
         }
+        LOG.info("Resolved {} page(s) — starting export", pages.size());
 
         ExportStats stats = new ExportStats(pages.size());
         runExport(settings, outputRoot, lockfile, pages, stats);
         runCleanup(settings, lockfile, seenBaseUrls, stats);
+        LOG.info("Export finished: {} exported, {} skipped, {} failed, {} removed",
+                stats.exported(), stats.skipped(), stats.failed(), stats.removed());
         return stats;
     }
 
@@ -159,17 +164,28 @@ public final class ExportService {
             }
         }
 
+        int skippedCount = targets.size() - toExport.size();
         if (toExport.isEmpty()) {
             LOG.info("All {} page(s) unchanged — nothing to export.", targets.size());
             return;
         }
+        if (skippedCount > 0) {
+            LOG.info("{} page(s) unchanged — skipping; exporting {} page(s)",
+                    skippedCount, toExport.size());
+        }
 
         ParallelExportRunner.RenderingContextFactory rcFactory = page ->
                 new RenderingContext(page, settings.export(), fetcher, templateVars, outputRoot);
+        boolean serial = "DEBUG".equalsIgnoreCase(settings.export().logLevel())
+                || settings.connectionConfig().maxWorkers() <= 1;
+        LOG.info("Exporting {} page(s) in {} mode (max_workers={})",
+                toExport.size(),
+                serial ? "serial" : "parallel",
+                settings.connectionConfig().maxWorkers());
         ParallelExportRunner runner = new ParallelExportRunner(
                 fetcher, exporter, lockfile, rcFactory,
                 settings.connectionConfig().maxWorkers(),
-                "DEBUG".equalsIgnoreCase(settings.export().logLevel()));
+                serial);
         runner.run(toExport, stats);
     }
 

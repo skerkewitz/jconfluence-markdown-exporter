@@ -77,14 +77,19 @@ public final class ParallelExportRunner {
     }
 
     private void runOne(ExportablePage page, ExportStats stats) {
+        long started = System.currentTimeMillis();
         try {
+            LOG.debug("[{}] Worker starting page id={}", Thread.currentThread().getName(), page.id());
             Page full = fetcher.getPage(page.id(), page.baseUrl());
             Map<String, AttachmentEntry> attachments = exporter.exportPage(full);
             RenderingContext rc = rcFactory.create(full);
             lockfile.recordPage(full, attachments, rc);
             stats.incExported();
+            LOG.info("[{}] Exported page id={} '{}' in {} ms",
+                    Thread.currentThread().getName(), full.id(), full.title(),
+                    System.currentTimeMillis() - started);
         } catch (Exception e) {
-            LOG.warn("Failed to export page {}: {}", page.id(), e.toString());
+            LOG.warn("Failed to export page {}: {}", page.id(), e.toString(), e);
             stats.incFailed();
         }
     }

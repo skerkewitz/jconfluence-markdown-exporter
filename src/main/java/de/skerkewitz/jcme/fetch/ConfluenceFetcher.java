@@ -72,28 +72,37 @@ public class ConfluenceFetcher {
     // -------------------- Resolution from URLs --------------------
 
     public Page resolvePageFromUrl(String pageUrl) {
+        LOG.info("Resolving page URL: {}", pageUrl);
         String baseUrl = UrlParsing.extractBaseUrl(pageUrl);
+        LOG.debug("Extracted base URL: {}", baseUrl);
         // Touch the client (creates/prompts on first connection)
+        LOG.debug("Acquiring Confluence client for {}", baseUrl);
         apiFactory.getConfluence(baseUrl);
 
         Optional<Long> queryId = UrlParsing.extractPageIdQueryParam(pageUrl);
         if (queryId.isPresent()) {
+            LOG.debug("Found pageId query parameter: {}", queryId.get());
             return getPage(queryId.get(), baseUrl);
         }
 
         String relative = UrlParsing.relativePath(pageUrl, baseUrl);
+        LOG.debug("Parsing Confluence path: {}", relative);
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath(relative);
         if (ref.isPresent()) {
             ConfluenceRef r = ref.get();
             if (r.pageId() != null) {
+                LOG.debug("Resolved page id={} from URL path", r.pageId());
                 return getPage(r.pageId(), baseUrl);
             }
             if (r.spaceKey() != null && r.pageTitle() != null) {
+                LOG.info("Looking up page '{}' in space '{}'", r.pageTitle(), r.spaceKey());
                 JsonNode page = apiFactory.getConfluence(baseUrl)
                         .getPageByTitle(r.spaceKey(), r.pageTitle(), "version");
                 JsonNode first = first(page.path("results"));
                 if (first != null && !first.isMissingNode()) {
-                    return getPage(first.path("id").asLong(), baseUrl);
+                    long resolvedId = first.path("id").asLong();
+                    LOG.debug("Page lookup by title resolved id={}", resolvedId);
+                    return getPage(resolvedId, baseUrl);
                 }
             }
         }
@@ -101,36 +110,49 @@ public class ConfluenceFetcher {
     }
 
     public Space resolveSpaceFromUrl(String spaceUrl) {
+        LOG.info("Resolving space URL: {}", spaceUrl);
         String baseUrl = UrlParsing.extractBaseUrl(spaceUrl);
         apiFactory.getConfluence(baseUrl);
         String relative = UrlParsing.relativePath(spaceUrl, baseUrl);
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath(relative);
         if (ref.isPresent() && ref.get().spaceKey() != null) {
+            LOG.debug("Resolved space key '{}' from URL path", ref.get().spaceKey());
             return getSpace(ref.get().spaceKey(), baseUrl);
         }
         throw new IllegalArgumentException("Could not parse space URL " + spaceUrl);
     }
 
     public Organization resolveOrganizationFromUrl(String baseUrl) {
+        LOG.info("Resolving organization at base URL: {}", baseUrl);
         return getOrganization(UrlParsing.normalizeInstanceUrl(baseUrl));
     }
 
     // -------------------- Cached fetches --------------------
 
     public Space getSpace(String spaceKey, String baseUrl) {
+        Space cached = spaceCache.get(new CacheKey<>(baseUrl, spaceKey));
+        if (cached != null) {
+            LOG.debug("Space cache hit: key={}", spaceKey);
+            return cached;
+        }
         return spaceCache.computeIfAbsent(new CacheKey<>(baseUrl, spaceKey), k -> {
+            LOG.debug("Fetching space '{}' from {}", spaceKey, baseUrl);
             JsonNode data = apiFactory.getConfluence(baseUrl).getSpace(spaceKey, "homepage");
-            return Space.fromJson(data, baseUrl);
+            Space space = Space.fromJson(data, baseUrl);
+            LOG.info("Loaded space '{}' (homepage id={})", space.name(), space.homepage());
+            return space;
         });
     }
 
     public Organization getOrganization(String baseUrl) {
         return orgCache.computeIfAbsent(new CacheKey<>(baseUrl, baseUrl), k -> {
+            LOG.info("Listing global spaces at {}", baseUrl);
             ConfluenceClient client = apiFactory.getConfluence(baseUrl);
             List<Space> spaces = new ArrayList<>();
             int start = 0;
             int pageSize = 100;
             while (true) {
+                LOG.debug("Fetching spaces batch start={} limit={}", start, pageSize);
                 JsonNode resp = client.getAllSpaces("global", "current", "homepage", pageSize, start);
                 JsonNode results = resp.path("results");
                 int seen = 0;
@@ -138,27 +160,40 @@ public class ConfluenceFetcher {
                     spaces.add(Space.fromJson(s, baseUrl));
                     seen++;
                 }
+                LOG.debug("Got {} spaces in batch (total so far: {})", seen, spaces.size());
                 if (seen < pageSize) break;
                 start += pageSize;
             }
+            LOG.info("Discovered {} space(s) at {}", spaces.size(), baseUrl);
             return new Organization(baseUrl, spaces);
         });
     }
 
     public Page getPage(long pageId, String baseUrl) {
+        Page cached = pageCache.get(new CacheKey<>(baseUrl, pageId));
+        if (cached != null) {
+            LOG.debug("Page cache hit: id={}", pageId);
+            return cached;
+        }
         return pageCache.computeIfAbsent(new CacheKey<>(baseUrl, pageId), k -> fetchPage(pageId, baseUrl));
     }
 
     private Page fetchPage(long pageId, String baseUrl) {
+        LOG.info("Fetching page id={} from {}", pageId, baseUrl);
         ConfluenceClient client = apiFactory.getConfluence(baseUrl);
         JsonNode data;
+        long startTime = System.currentTimeMillis();
         try {
             data = client.getPageById(pageId, PAGE_EXPAND);
+            LOG.debug("getPageById id={} returned in {} ms", pageId, System.currentTimeMillis() - startTime);
         } catch (ApiException e) {
             if (e.isNotFound() || (e.statusCode() >= 400 && e.statusCode() < 500)) {
-                LOG.warn("Could not access page id={} — treating as inaccessible", pageId);
+                LOG.warn("Could not access page id={} (status {}) — treating as inaccessible",
+                        pageId, e.statusCode());
                 return Page.inaccessible(pageId, baseUrl);
             }
+            LOG.error("Failed to fetch page id={}: status={} message={}",
+                    pageId, e.statusCode(), e.getMessage());
             throw e;
         }
         if (data == null || !data.isObject()) {
@@ -167,21 +202,32 @@ public class ConfluenceFetcher {
                     -1, baseUrl);
         }
 
+        String title = JsonHelpers.text(data, "title");
+        LOG.info("Got page id={} title='{}' — resolving space, ancestors, attachments", pageId, title);
+
         Space space = getSpace(JsonHelpers.extractSpaceKey(data), baseUrl);
         List<Ancestor> ancestors = parseAncestors(data.path("ancestors"), baseUrl);
+        LOG.debug("Page id={} has {} ancestor(s)", pageId, ancestors.size());
+
         List<Label> labels = new ArrayList<>();
         for (JsonNode l : JsonHelpers.walk(data, "metadata", "labels", "results")) {
             labels.add(Label.fromJson(l));
         }
+        LOG.debug("Page id={} has {} label(s)", pageId, labels.size());
+
         List<Attachment> attachments = getAttachments(pageId, baseUrl);
+
+        Version version = Version.fromJson(data.path("version"));
+        LOG.info("Assembled page id={} title='{}' (v{}, {} attachment(s), {} label(s))",
+                pageId, title, version.number(), attachments.size(), labels.size());
 
         return new Page(
                 baseUrl,
                 pageId,
-                JsonHelpers.text(data, "title"),
+                title,
                 space,
                 ancestors,
-                Version.fromJson(data.path("version")),
+                version,
                 JsonHelpers.text(JsonHelpers.walk(data, "body", "view"), "value"),
                 JsonHelpers.text(JsonHelpers.walk(data, "body", "export_view"), "value"),
                 JsonHelpers.text(JsonHelpers.walk(data, "body", "editor2"), "value"),
@@ -191,14 +237,17 @@ public class ConfluenceFetcher {
     }
 
     public List<Descendant> getDescendants(Page page) {
+        LOG.info("Listing descendants of page id={} '{}'", page.id(), page.title());
         ConfluenceClient client = apiFactory.getConfluence(page.baseUrl());
         List<Descendant> result = new ArrayList<>();
         try {
+            LOG.debug("Searching CQL ancestor={} (limit {})", page.id(), DESCENDANT_PAGE_SIZE);
             JsonNode response = client.searchCql(
                     "type=page AND ancestor=" + page.id(), DESCENDANT_EXPAND, DESCENDANT_PAGE_SIZE);
             collectDescendants(response, result, page.baseUrl());
             String next = JsonHelpers.text(response.path("_links"), "next");
             while (next != null && !next.isEmpty()) {
+                LOG.debug("Following descendants paging cursor (have {} so far)", result.size());
                 response = client.getRelative(next);
                 collectDescendants(response, result, page.baseUrl());
                 next = JsonHelpers.text(response.path("_links"), "next");
@@ -210,6 +259,7 @@ public class ConfluenceFetcher {
             }
             throw e;
         }
+        LOG.info("Found {} descendant(s) under page id={}", result.size(), page.id());
         return result;
     }
 
@@ -230,18 +280,24 @@ public class ConfluenceFetcher {
     }
 
     public List<Attachment> getAttachments(long pageId, String baseUrl) {
+        LOG.debug("Listing attachments for page id={}", pageId);
         ConfluenceClient client = apiFactory.getConfluence(baseUrl);
         List<Attachment> result = new ArrayList<>();
         int start = 0;
         while (true) {
+            LOG.debug("Fetching attachments batch start={} limit={} for page id={}",
+                    start, ATTACHMENT_PAGE_SIZE, pageId);
             JsonNode resp = client.getAttachmentsFromContent(pageId, start, ATTACHMENT_PAGE_SIZE, ATTACHMENT_EXPAND);
             int size = resp.path("size").asInt(0);
             for (JsonNode item : resp.path("results")) {
                 result.add(parseAttachment(item, baseUrl));
             }
+            LOG.debug("Got {} attachment(s) in batch (total so far: {}) for page id={}",
+                    size, result.size(), pageId);
             if (size < ATTACHMENT_PAGE_SIZE) break;
             start += size;
         }
+        LOG.debug("Page id={} has {} attachment(s) in total", pageId, result.size());
         return result;
     }
 

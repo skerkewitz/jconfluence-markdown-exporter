@@ -59,14 +59,20 @@ public final class PageExporter {
             LOG.warn("Skipping export for inaccessible page id={}", page.id());
             return Map.of();
         }
+        LOG.info("Exporting page id={} '{}' (v{})", page.id(), page.title(),
+                page.version() == null ? "?" : page.version().number());
 
         RenderingContext rc = new RenderingContext(page, export, fetcher, templateVars, outputRoot);
         Map<String, AttachmentEntry> attachmentEntries = exportAttachments(page, rc);
 
         Path mdPath = outputRoot.resolve(rc.pageExportPath(page));
+        LOG.debug("Rendering markdown for page id={} to {}", page.id(), mdPath);
+        long renderStart = System.currentTimeMillis();
         String markdown = renderer.render(page);
+        LOG.debug("Rendered page id={} ({} chars) in {} ms", page.id(), markdown.length(),
+                System.currentTimeMillis() - renderStart);
         FileIO.writeString(mdPath, markdown);
-        LOG.info("Exported '{}' -> {}", page.title(), mdPath);
+        LOG.info("Wrote {} bytes to {}", markdown.getBytes(java.nio.charset.StandardCharsets.UTF_8).length, mdPath);
         return attachmentEntries;
     }
 
@@ -75,7 +81,12 @@ public final class PageExporter {
         Map<String, AttachmentEntry> newEntries = new LinkedHashMap<>();
         ConfluenceClient client = fetcher.apiFactory().getConfluence(page.baseUrl());
 
-        for (Attachment attachment : selectAttachmentsForExport(page)) {
+        List<Attachment> selected = selectAttachmentsForExport(page);
+        if (!selected.isEmpty()) {
+            LOG.info("Page id={} '{}': processing {} attachment(s)",
+                    page.id(), page.title(), selected.size());
+        }
+        for (Attachment attachment : selected) {
             String attId = attachment.id();
             int attVersion = attachment.version() == null ? 0 : attachment.version().number();
             Path target = outputRoot.resolve(rc.attachmentExportPath(attachment));
@@ -92,9 +103,13 @@ public final class PageExporter {
             }
 
             try {
+                LOG.debug("Downloading attachment '{}' ({} bytes expected) from {}",
+                        attachment.title(), attachment.fileSize(), attachment.downloadLink());
+                long start = System.currentTimeMillis();
                 byte[] bytes = client.downloadAttachment(attachment.downloadLink());
                 FileIO.write(target, bytes);
-                LOG.debug("Saved attachment '{}' ({} bytes)", attachment.title(), bytes.length);
+                LOG.info("Saved attachment '{}' ({} bytes) in {} ms -> {}",
+                        attachment.title(), bytes.length, System.currentTimeMillis() - start, target);
                 stats.incAttachmentsExported();
                 if (attVersion > 0) {
                     String relPath = rc.attachmentExportPath(attachment).toString().replace('\\', '/');

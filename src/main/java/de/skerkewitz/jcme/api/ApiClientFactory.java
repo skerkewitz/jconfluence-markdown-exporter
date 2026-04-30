@@ -60,18 +60,23 @@ public final class ApiClientFactory {
 
         if ((details.cloudId() == null || details.cloudId().isEmpty())
                 && UrlParsing.isStandardAtlassianCloudUrl(normalized)) {
+            LOG.info("Probing {}/_edge/tenant_info to auto-detect Cloud ID (5s timeout)", normalized);
             String cloudId = tryFetchCloudId(normalized);
             if (cloudId != null) {
                 LOG.info("Auto-fetched Atlassian Cloud ID for {} — storing in config", normalized);
                 configStore.setByKeys(java.util.List.of("auth", "confluence", normalized, "cloud_id"), cloudId);
                 settings = configStore.loadEffective();
                 details = AuthLookup.find(settings.auth().confluence(), normalized).orElse(details);
+            } else {
+                LOG.debug("No Cloud ID discovered at {}/_edge/tenant_info — proceeding without gateway routing", normalized);
             }
         }
 
         String sdkUrl = (details.cloudId() != null && !details.cloudId().isEmpty())
                 ? UrlParsing.buildGatewayUrl("confluence", details.cloudId())
                 : normalized;
+        LOG.info("Verifying Confluence credentials against {} (timeout {}s)",
+                sdkUrl, settings.connectionConfig().timeout());
         HttpExecutor http = new HttpExecutor(details, settings.connectionConfig());
         ConfluenceClient client = new ConfluenceClient(sdkUrl, http);
         try {

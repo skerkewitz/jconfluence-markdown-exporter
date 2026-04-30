@@ -33,6 +33,7 @@ public class App implements Runnable {
     }
 
     public static void main(String[] args) {
+        Logging.initFromConfig();
         CommandLine cmd = new CommandLine(new App());
         cmd.setCaseInsensitiveEnumValuesAllowed(true);
         if (args.length == 0) {

@@ -1,4 +1,9 @@
 <configuration>
+    <!--
+        Logback writes everything to stderr. The level is INFO by default; jcme overrides it
+        at startup based on export.log_level (set via 'jcme config set export.log_level=DEBUG'
+        or JCME_EXPORT__LOG_LEVEL=DEBUG). See de.skerkewitz.jcme.Logging.
+    -->
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>

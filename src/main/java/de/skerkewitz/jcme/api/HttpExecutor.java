@@ -61,31 +61,43 @@ public final class HttpExecutor {
         AtomicReference<Exception> lastError = new AtomicReference<>();
 
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            long started = System.currentTimeMillis();
+            LOG.debug("HTTP {} {} (attempt {}/{}, timeout {}s)",
+                    request.method(), request.uri(), attempt + 1, maxAttempts, conn.timeout());
             try {
                 HttpResponse<byte[]> response = client.send(request, HttpResponse.BodyHandlers.ofByteArray());
                 int status = response.statusCode();
+                long elapsed = System.currentTimeMillis() - started;
                 if (status < 400) {
+                    LOG.debug("HTTP {} {} -> {} in {} ms ({} bytes)",
+                            request.method(), request.uri(), status, elapsed,
+                            response.body() == null ? 0 : response.body().length);
                     return response;
                 }
                 if (!retryStatusCodes.contains(status) || attempt == maxAttempts - 1) {
+                    LOG.warn("HTTP {} {} -> {} after {} ms — not retrying",
+                            request.method(), request.uri(), status, elapsed);
                     return response;
                 }
                 long sleepSeconds = backoffSeconds(attempt);
-                LOG.debug("HTTP {} from {} — retrying in {}s (attempt {}/{})",
-                        status, request.uri(), sleepSeconds, attempt + 1, maxAttempts);
+                LOG.warn("HTTP {} from {} after {} ms — retrying in {}s (attempt {}/{})",
+                        status, request.uri(), elapsed, sleepSeconds, attempt + 1, maxAttempts);
                 sleep(sleepSeconds);
             } catch (IOException | InterruptedException e) {
+                long elapsed = System.currentTimeMillis() - started;
                 lastError.set(e);
                 if (e instanceof InterruptedException) {
                     Thread.currentThread().interrupt();
                     throw new ApiException("Interrupted while sending request", e);
                 }
                 if (attempt == maxAttempts - 1) {
+                    LOG.error("Network error contacting {} after {} ms: {}",
+                            request.uri(), elapsed, e.getMessage());
                     throw new ApiException("Network error contacting " + request.uri(), e);
                 }
                 long sleepSeconds = backoffSeconds(attempt);
-                LOG.debug("Network error for {} — retrying in {}s (attempt {}/{}): {}",
-                        request.uri(), sleepSeconds, attempt + 1, maxAttempts, e.getMessage());
+                LOG.warn("Network error for {} after {} ms — retrying in {}s (attempt {}/{}): {}",
+                        request.uri(), elapsed, sleepSeconds, attempt + 1, maxAttempts, e.getMessage());
                 sleep(sleepSeconds);
             }
         }
