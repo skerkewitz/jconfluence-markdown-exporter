@@ -381,37 +381,6 @@ JCME_CONNECTION_CONFIG__VERIFY_SSL=false
 
 ENV vars override file values for the duration of the run; they are not persisted.
 
-## Status
-
-Phases of the port (see commit history for details):
-
-- ✅ **Phase 0–1**: project skeleton, configuration storage, env-var overlay,
-  `config get/set/list/path/reset`, `bugreport`, `version`.
-- ✅ **Phase 2**: REST client (HTTP/2 via `java.net.http.HttpClient`), URL parsing for
-  Cloud/Server/gateway/`?pageId=` formats, retry/backoff, SSL trust-all toggle,
-  per-base-URL client cache, Cloud-ID auto-fetch.
-- ✅ **Phase 3**: typed records mirroring the Python pydantic models, `ConfluenceFetcher`
-  with cached lookups for pages/spaces/users/Jira issues, MIME → extension table,
-  filename sanitizer, path templates.
-- ✅ **Phase 4–5**: HTML → Markdown converter built on jsoup, Confluence-specific
-  converters for all the macros enumerated above, page renderer that assembles
-  front-matter + breadcrumbs + body + placeholder escaping.
-- ✅ **Phase 6**: end-to-end export pipeline — atomic file writes, per-page worker, lockfile
-  manager, attachment downloader, stale-page cleanup, parallel runner. CLI commands
-  `pages` / `pages-with-descendants` / `spaces` / `orgs` are all wired.
-- ✅ **Phase 7**: rich progress UI — phase headers, single-line replacing status during
-  sequential phases, per-page progress with running counter and outcome glyphs, and a
-  box-drawn colored summary panel at the end. Auto-falls-back to plain text when not on
-  a TTY (or when `NO_COLOR` / `CI` is set).
-- ✅ **Phase 8**: interactive configuration menu, including the auth-failure recovery flow
-  that pre-fills the URL and walks the user through credential entry.
-- ✅ **Phase 9**: packaging — Gradle + Maven build descriptors, repo-root wrappers
-  (`jcmew.sh` / `jcmew.bat`), GraalVM native-image build via `nativeCompile` /
-  `mvn -Pnative package`, README, MIT LICENSE.
-
-The Python project's full test fixture set has not been ported; instead the Java tests use
-in-process `HttpServer`-backed integration tests for the export pipeline and unit tests
-for the conversion logic.
 
 ## Differences from the Python original
 
