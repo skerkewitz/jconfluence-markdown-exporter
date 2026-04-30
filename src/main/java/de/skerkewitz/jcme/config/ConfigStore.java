@@ -7,7 +7,6 @@ import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import com.fasterxml.jackson.dataformat.yaml.YAMLGenerator;
-import net.harawata.appdirs.AppDirsFactory;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -16,6 +15,7 @@ import java.nio.file.Paths;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 /**
@@ -55,14 +55,51 @@ public final class ConfigStore {
         return configPath;
     }
 
-    /** Resolve the config file path: {@code JCME_CONFIG_PATH} overrides; else OS-specific app dir. */
+    /**
+     * Resolve the config file path. Precedence:
+     * <ol>
+     *   <li>{@code JCME_CONFIG_PATH} env var (full file path).</li>
+     *   <li>OS-specific application config directory:
+     *     <ul>
+     *       <li>Windows: {@code %APPDATA%\<APP_NAME>\app_data.json}</li>
+     *       <li>macOS: {@code ~/Library/Application Support/<APP_NAME>/app_data.json}</li>
+     *       <li>Linux/other: {@code $XDG_CONFIG_HOME/<APP_NAME>/app_data.json}, falling
+     *           back to {@code ~/.config/<APP_NAME>/app_data.json}</li>
+     *     </ul>
+     *   </li>
+     * </ol>
+     *
+     * <p>Hand-rolled (no JNA dependency) so the binary works under GraalVM native-image.
+     */
     public static Path resolveDefaultConfigPath(Map<String, String> env) {
         String override = env.get(ENV_CONFIG_PATH);
         if (override != null && !override.isBlank()) {
             return Paths.get(override);
         }
-        String dir = AppDirsFactory.getInstance().getUserConfigDir(APP_NAME, null, null);
-        return Paths.get(dir, "app_data.json");
+        return userConfigDir(env, APP_NAME).resolve("app_data.json");
+    }
+
+    /** Compute the OS-specific user config directory for {@code appName}, without JNA. */
+    static Path userConfigDir(Map<String, String> env, String appName) {
+        String os = System.getProperty("os.name", "").toLowerCase(Locale.ROOT);
+        String home = System.getProperty("user.home", ".");
+
+        if (os.contains("win")) {
+            String appData = nonBlank(env.get("APPDATA"));
+            if (appData != null) return Paths.get(appData, appName);
+            return Paths.get(home, "AppData", "Roaming", appName);
+        }
+        if (os.contains("mac") || os.contains("darwin")) {
+            return Paths.get(home, "Library", "Application Support", appName);
+        }
+        // Linux / *nix
+        String xdg = nonBlank(env.get("XDG_CONFIG_HOME"));
+        if (xdg != null) return Paths.get(xdg, appName);
+        return Paths.get(home, ".config", appName);
+    }
+
+    private static String nonBlank(String s) {
+        return (s == null || s.isBlank()) ? null : s;
     }
 
     /** Load the persisted config from disk. Returns defaults if file missing or invalid. */

@@ -1,0 +1,84 @@
+[
+  {
+    "comment": "Config records — round-tripped via Jackson",
+    "name": "de.skerkewitz.jcme.config.AppConfig",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.config.ApiDetails",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.config.AuthConfig",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.config.ConnectionConfig",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.config.ExportConfig",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "Lockfile entries — round-tripped via Jackson",
+    "name": "de.skerkewitz.jcme.lockfile.ConfluenceLock",
+    "allDeclaredFields": true,
+    "allDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "allDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.lockfile.OrgEntry",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.lockfile.SpaceEntry",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.lockfile.PageEntry",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "name": "de.skerkewitz.jcme.lockfile.AttachmentEntry",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  }
+]

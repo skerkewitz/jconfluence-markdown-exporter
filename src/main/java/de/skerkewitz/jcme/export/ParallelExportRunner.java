@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.export;
 
+import de.skerkewitz.jcme.cli.progress.ProgressUi;
 import de.skerkewitz.jcme.fetch.ConfluenceFetcher;
 import de.skerkewitz.jcme.lockfile.AttachmentEntry;
 import de.skerkewitz.jcme.lockfile.LockfileManager;
@@ -16,6 +17,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * Runs page exports in parallel via a fixed thread pool sized from
@@ -36,16 +38,27 @@ public final class ParallelExportRunner {
     private final RenderingContextFactory rcFactory;
     private final int maxWorkers;
     private final boolean serial;
+    private final ProgressUi progress;
+    private final int total;
+    private final AtomicInteger doneCount = new AtomicInteger(0);
 
     public ParallelExportRunner(ConfluenceFetcher fetcher, PageExporter exporter,
                                 LockfileManager lockfile, RenderingContextFactory rcFactory,
                                 int maxWorkers, boolean serial) {
+        this(fetcher, exporter, lockfile, rcFactory, maxWorkers, serial, ProgressUi.silent(), 0);
+    }
+
+    public ParallelExportRunner(ConfluenceFetcher fetcher, PageExporter exporter,
+                                LockfileManager lockfile, RenderingContextFactory rcFactory,
+                                int maxWorkers, boolean serial, ProgressUi progress, int total) {
         this.fetcher = fetcher;
         this.exporter = exporter;
         this.lockfile = lockfile;
         this.rcFactory = rcFactory;
         this.maxWorkers = Math.max(1, maxWorkers);
         this.serial = serial || maxWorkers <= 1;
+        this.progress = progress;
+        this.total = total;
     }
 
     public void run(List<? extends ExportablePage> pages, ExportStats stats) {
@@ -78,19 +91,26 @@ public final class ParallelExportRunner {
 
     private void runOne(ExportablePage page, ExportStats stats) {
         long started = System.currentTimeMillis();
+        long pageId = page.id();
+        String pageTitle = page.title();
         try {
-            LOG.debug("[{}] Worker starting page id={}", Thread.currentThread().getName(), page.id());
-            Page full = fetcher.getPage(page.id(), page.baseUrl());
+            LOG.debug("[{}] Worker starting page id={}", Thread.currentThread().getName(), pageId);
+            Page full = fetcher.getPage(pageId, page.baseUrl());
+            pageTitle = full.title();
             Map<String, AttachmentEntry> attachments = exporter.exportPage(full);
             RenderingContext rc = rcFactory.create(full);
             lockfile.recordPage(full, attachments, rc);
             stats.incExported();
-            LOG.info("[{}] Exported page id={} '{}' in {} ms",
-                    Thread.currentThread().getName(), full.id(), full.title(),
-                    System.currentTimeMillis() - started);
+            long elapsed = System.currentTimeMillis() - started;
+            LOG.debug("[{}] Exported page id={} '{}' in {} ms",
+                    Thread.currentThread().getName(), full.id(), full.title(), elapsed);
+            progress.pageDone(doneCount.incrementAndGet(), total, pageId, pageTitle,
+                    ProgressUi.Outcome.EXPORTED, elapsed);
         } catch (Exception e) {
-            LOG.warn("Failed to export page {}: {}", page.id(), e.toString(), e);
+            LOG.warn("Failed to export page {}: {}", pageId, e.toString(), e);
             stats.incFailed();
+            progress.pageDone(doneCount.incrementAndGet(), total, pageId, pageTitle,
+                    ProgressUi.Outcome.FAILED, -1);
         }
     }
 

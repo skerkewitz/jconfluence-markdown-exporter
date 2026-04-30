@@ -141,6 +141,17 @@ class ConfigStoreTest {
     }
 
     @Test
+    void user_config_dir_falls_back_to_os_specific_default_without_appdirs() {
+        // Verify the hand-rolled resolver returns *some* path under the user's home
+        // for the current platform, regardless of JNA availability.
+        Path dir = ConfigStore.userConfigDir(Map.of(), "myapp");
+        String s = dir.toString();
+        assertThat(s).contains("myapp");
+        // Should be under the user's home directory on every supported OS.
+        assertThat(s).contains(System.getProperty("user.home"));
+    }
+
+    @Test
     void env_overlay_skips_jcme_config_path(@TempDir Path tmp) {
         Path cfg = tmp.resolve("app_data.json");
         Map<String, String> env = Map.of("JCME_CONFIG_PATH", "/tmp/custom.json");

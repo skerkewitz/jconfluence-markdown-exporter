@@ -1,6 +1,7 @@
 package de.skerkewitz.jcme.export;
 
 import de.skerkewitz.jcme.api.ApiClientFactory;
+import de.skerkewitz.jcme.cli.progress.ProgressUi;
 import de.skerkewitz.jcme.config.AppConfig;
 import de.skerkewitz.jcme.config.ConfigStore;
 import de.skerkewitz.jcme.fetch.ConfluenceFetcher;
@@ -34,22 +35,35 @@ public final class ExportService {
     private final ConfigStore configStore;
     private final ApiClientFactory apiFactory;
     private final ConfluenceFetcher fetcher;
+    private final ProgressUi progress;
 
     public ExportService(ConfigStore configStore) {
+        this(configStore, ProgressUi.silent());
+    }
+
+    public ExportService(ConfigStore configStore, ProgressUi progress) {
         this.configStore = configStore;
         this.apiFactory = new ApiClientFactory(configStore);
         this.fetcher = new ConfluenceFetcher(apiFactory, configStore);
+        this.progress = progress;
     }
 
     public ExportService(ConfigStore configStore, ApiClientFactory apiFactory,
                          ConfluenceFetcher fetcher) {
+        this(configStore, apiFactory, fetcher, ProgressUi.silent());
+    }
+
+    public ExportService(ConfigStore configStore, ApiClientFactory apiFactory,
+                         ConfluenceFetcher fetcher, ProgressUi progress) {
         this.configStore = configStore;
         this.apiFactory = apiFactory;
         this.fetcher = fetcher;
+        this.progress = progress;
     }
 
     public ConfluenceFetcher fetcher() { return fetcher; }
     public ApiClientFactory apiFactory() { return apiFactory; }
+    public ProgressUi progress() { return progress; }
 
     /** Export one or more pages by URL. Equivalent of {@code cme pages URL...}. */
     public ExportStats exportPages(List<String> urls) {
@@ -57,22 +71,21 @@ public final class ExportService {
         Path outputRoot = resolveOutputRoot(settings);
         LOG.info("Output root: {}", outputRoot.toAbsolutePath());
         LockfileManager lockfile = newLockfile(settings, outputRoot);
-        LOG.info("Resolving {} page URL(s) before export…", urls.size());
 
+        progress.phase("Resolving " + urls.size() + " page URL(s)");
         Set<String> seenBaseUrls = new LinkedHashSet<>();
         List<Page> pages = new ArrayList<>();
         for (String url : urls) {
+            progress.status(url);
             Page page = fetcher.resolvePageFromUrl(url);
             pages.add(page);
             seenBaseUrls.add(page.baseUrl());
         }
-        LOG.info("Resolved {} page(s) — starting export", pages.size());
+        progress.clearStatus();
 
         ExportStats stats = new ExportStats(pages.size());
         runExport(settings, outputRoot, lockfile, pages, stats);
         runCleanup(settings, lockfile, seenBaseUrls, stats);
-        LOG.info("Export finished: {} exported, {} skipped, {} failed, {} removed",
-                stats.exported(), stats.skipped(), stats.failed(), stats.removed());
         return stats;
     }
 
@@ -82,14 +95,18 @@ public final class ExportService {
         Path outputRoot = resolveOutputRoot(settings);
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
+        progress.phase("Resolving " + urls.size() + " page URL(s) + descendants");
         Set<String> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String url : urls) {
+            progress.status(url);
             Page page = fetcher.resolvePageFromUrl(url);
             targets.add(page);
             for (Descendant d : fetcher.getDescendants(page)) targets.add(d);
             seenBaseUrls.add(page.baseUrl());
         }
+        progress.clearStatus();
+
         ExportStats stats = new ExportStats(targets.size());
         runExport(settings, outputRoot, lockfile, targets, stats);
         runCleanup(settings, lockfile, seenBaseUrls, stats);
@@ -102,13 +119,17 @@ public final class ExportService {
         Path outputRoot = resolveOutputRoot(settings);
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
+        progress.phase("Resolving " + urls.size() + " space URL(s)");
         Set<String> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String url : urls) {
+            progress.status(url);
             Space space = fetcher.resolveSpaceFromUrl(url);
             seenBaseUrls.add(space.baseUrl());
             collectSpacePages(space, targets);
         }
+        progress.clearStatus();
+
         ExportStats stats = new ExportStats(targets.size());
         runExport(settings, outputRoot, lockfile, targets, stats);
         runCleanup(settings, lockfile, seenBaseUrls, stats);
@@ -121,13 +142,17 @@ public final class ExportService {
         Path outputRoot = resolveOutputRoot(settings);
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
+        progress.phase("Listing spaces in " + baseUrls.size() + " organization(s)");
         Set<String> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String baseUrl : baseUrls) {
+            progress.status(baseUrl);
             Organization org = fetcher.resolveOrganizationFromUrl(baseUrl);
             seenBaseUrls.add(org.baseUrl());
             for (Space space : org.spaces()) collectSpacePages(space, targets);
         }
+        progress.clearStatus();
+
         ExportStats stats = new ExportStats(targets.size());
         runExport(settings, outputRoot, lockfile, targets, stats);
         runCleanup(settings, lockfile, seenBaseUrls, stats);
@@ -166,26 +191,23 @@ public final class ExportService {
 
         int skippedCount = targets.size() - toExport.size();
         if (toExport.isEmpty()) {
-            LOG.info("All {} page(s) unchanged — nothing to export.", targets.size());
+            progress.phase("All " + targets.size() + " page(s) unchanged — nothing to export");
             return;
         }
-        if (skippedCount > 0) {
-            LOG.info("{} page(s) unchanged — skipping; exporting {} page(s)",
-                    skippedCount, toExport.size());
-        }
+        boolean serial = "DEBUG".equalsIgnoreCase(settings.export().logLevel())
+                || settings.connectionConfig().maxWorkers() <= 1;
+        String phaseLabel = "Exporting " + toExport.size() + " page(s) "
+                + (serial ? "serially" : "in parallel (" + settings.connectionConfig().maxWorkers() + " workers)")
+                + (skippedCount > 0 ? " (" + skippedCount + " skipped)" : "");
+        progress.phase(phaseLabel);
 
         ParallelExportRunner.RenderingContextFactory rcFactory = page ->
                 new RenderingContext(page, settings.export(), fetcher, templateVars, outputRoot);
-        boolean serial = "DEBUG".equalsIgnoreCase(settings.export().logLevel())
-                || settings.connectionConfig().maxWorkers() <= 1;
-        LOG.info("Exporting {} page(s) in {} mode (max_workers={})",
-                toExport.size(),
-                serial ? "serial" : "parallel",
-                settings.connectionConfig().maxWorkers());
         ParallelExportRunner runner = new ParallelExportRunner(
                 fetcher, exporter, lockfile, rcFactory,
                 settings.connectionConfig().maxWorkers(),
-                serial);
+                serial,
+                progress, toExport.size());
         runner.run(toExport, stats);
     }
 
@@ -196,9 +218,12 @@ public final class ExportService {
         for (String baseUrl : baseUrls) {
             Set<String> unseen = lockfile.unseenIds();
             if (unseen.isEmpty()) continue;
+            progress.phase("Checking " + unseen.size() + " unseen page(s) for removal");
             List<String> sorted = new ArrayList<>(unseen);
             sorted.sort(String::compareTo);
+            progress.status(baseUrl);
             Set<String> deleted = cleanup.fetchDeletedPageIds(sorted, baseUrl);
+            progress.clearStatus();
             if (!deleted.isEmpty()) {
                 LOG.info("Removing {} stale page(s) from local export.", deleted.size());
             }

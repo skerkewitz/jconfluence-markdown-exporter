@@ -31,8 +31,6 @@
         <picocli.version>4.7.6</picocli.version>
         <jackson.version>2.18.2</jackson.version>
         <jsoup.version>1.18.3</jsoup.version>
-        <jline.version>3.27.1</jline.version>
-        <appdirs.version>1.4.0</appdirs.version>
         <slf4j.version>2.0.16</slf4j.version>
         <logback.version>1.5.12</logback.version>
         <junit.version>5.11.4</junit.version>
@@ -43,6 +41,7 @@
         <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
         <appassembler.plugin.version>2.1.0</appassembler.plugin.version>
+        <native.maven.plugin.version>0.10.4</native.maven.plugin.version>
     </properties>
 
     <dependencies>
@@ -75,20 +74,6 @@
             <groupId>org.jsoup</groupId>
             <artifactId>jsoup</artifactId>
             <version>${jsoup.version}</version>
-        </dependency>
-
-        <!-- Interactive prompts -->
-        <dependency>
-            <groupId>org.jline</groupId>
-            <artifactId>jline</artifactId>
-            <version>${jline.version}</version>
-        </dependency>
-
-        <!-- OS-specific app data dirs -->
-        <dependency>
-            <groupId>net.harawata</groupId>
-            <artifactId>appdirs</artifactId>
-            <version>${appdirs.version}</version>
         </dependency>
 
         <!-- Logging -->
@@ -264,4 +249,51 @@
             </plugin>
         </plugins>
     </build>
+
+    <!--
+        GraalVM native-image build, opt-in via `mvn -Pnative package`. Requires a
+        GraalVM JDK 21+ on PATH. Output binary lands at target/jcme(.exe).
+        See https://graalvm.github.io/native-build-tools/latest/maven-plugin.html
+    -->
+    <profiles>
+        <profile>
+            <id>native</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.graalvm.buildtools</groupId>
+                        <artifactId>native-maven-plugin</artifactId>
+                        <version>${native.maven.plugin.version}</version>
+                        <extensions>true</extensions>
+                        <executions>
+                            <execution>
+                                <id>build-native</id>
+                                <goals>
+                                    <goal>compile-no-fork</goal>
+                                </goals>
+                                <phase>package</phase>
+                            </execution>
+                        </executions>
+                        <configuration>
+                            <imageName>jcme</imageName>
+                            <mainClass>${main.class}</mainClass>
+                            <fallback>false</fallback>
+                            <buildArgs>
+                                <buildArg>--enable-url-protocols=https,http</buildArg>
+                                <buildArg>-H:+UnlockExperimentalVMOptions</buildArg>
+                                <buildArg>-H:+ReportExceptionStackTraces</buildArg>
+                                <buildArg>-Dfile.encoding=UTF-8</buildArg>
+                                <buildArg>-Dstdout.encoding=UTF-8</buildArg>
+                                <buildArg>-Dstderr.encoding=UTF-8</buildArg>
+                                <buildArg>-O2</buildArg>
+                            </buildArgs>
+                            <metadataRepository>
+                                <enabled>true</enabled>
+                            </metadataRepository>
+                        </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+    </profiles>
 </project>

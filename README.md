@@ -85,12 +85,56 @@ and forward any remaining arguments. They print a friendly error if you haven't 
 > The two build files are kept in sync by hand. If you change a dependency version,
 > update both [build.gradle.kts](build.gradle.kts) and [pom.xml](pom.xml).
 
-#### GraalVM native-image (true native binary)
+### GraalVM native-image (true native binary)
 
-A real ahead-of-time-compiled native executable (no JVM at runtime) isn't built out of
-the box: it requires reflection / resource hints for Jackson, jsoup, jline, picocli, and
-the SLF4J service-loader files, plus a working GraalVM toolchain. This is on the roadmap
-but not wired up yet.
+A real ahead-of-time-compiled native executable — no JVM at runtime, ~20–50 ms cold
+start, ~30–50 MB binary — is wired up under both Gradle and Maven via the
+[GraalVM `native-build-tools`](https://graalvm.github.io/native-build-tools/) plugin.
+
+**Prerequisites**: GraalVM JDK 21+ (Liberica NIK, Mandrel, or graalvm-ce all work)
+on `PATH` or `JAVA_HOME`. Verify with `native-image --version`.
+
+#### Gradle
+
+```bash
+./gradlew nativeCompile         # produces build/native/nativeCompile/jcme(.exe)
+./gradlew nativeRun --args="version"   # build + run in one step
+```
+
+#### Maven
+
+```bash
+mvn -Pnative package            # produces target/jcme(.exe)
+```
+
+The build downloads reachability metadata for popular libraries (Jackson, Logback,
+jsoup) from the GraalVM Reachability Metadata Repository automatically. Reflection
+hints for our own Jackson-bound records and resource-loaded files (`logback.xml`,
+the picocli-codegen output) live under
+[src/main/resources/META-INF/native-image/](src/main/resources/META-INF/native-image/)
+and are picked up automatically.
+
+#### Regenerating per-app metadata
+
+If you add a new Jackson-bound record or change a reflection-heavy code path and
+the native binary fails at runtime, regenerate metadata by running the tracing
+agent against a representative scenario:
+
+```bash
+./gradlew -Pagent run --args="config list"          # capture config-load reflection
+./gradlew metadataCopy --task run --dir src/main/resources/META-INF/native-image
+```
+
+Then commit the updated JSON files.
+
+#### Limitations
+
+- The interactive credential prompt uses `System.console()` which generally works under
+  native-image, but masked password input may behave slightly differently than on the JVM.
+- First-time `nativeCompile` is slow (~60–120 s). Subsequent builds reuse the
+  metadata cache and are much faster.
+- Cross-compilation isn't supported by `native-image` — build on the OS you're
+  targeting (or use a CI matrix).
 
 ## Logging
 
@@ -355,15 +399,15 @@ Phases of the port (see commit history for details):
 - ✅ **Phase 6**: end-to-end export pipeline — atomic file writes, per-page worker, lockfile
   manager, attachment downloader, stale-page cleanup, parallel runner. CLI commands
   `pages` / `pages-with-descendants` / `spaces` / `orgs` are all wired.
+- ✅ **Phase 7**: rich progress UI — phase headers, single-line replacing status during
+  sequential phases, per-page progress with running counter and outcome glyphs, and a
+  box-drawn colored summary panel at the end. Auto-falls-back to plain text when not on
+  a TTY (or when `NO_COLOR` / `CI` is set).
 - ✅ **Phase 8**: interactive configuration menu, including the auth-failure recovery flow
   that pre-fills the URL and walks the user through credential entry.
-
-Deferred:
-
-- 🚧 **Rich progress UI** (Phase 7). The current summary is plain text; the Python
-  original uses `rich` for a fancier panel.
-- 🚧 **GraalVM native-image build**. Would give native startup speed; needs reflection
-  hints for Jackson + jsoup. Out of scope for first cut.
+- ✅ **Phase 9**: packaging — Gradle + Maven build descriptors, repo-root wrappers
+  (`jcmew.sh` / `jcmew.bat`), GraalVM native-image build via `nativeCompile` /
+  `mvn -Pnative package`, README, MIT LICENSE.
 
 The Python project's full test fixture set has not been ported; instead the Java tests use
 in-process `HttpServer`-backed integration tests for the export pipeline and unit tests

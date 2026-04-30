@@ -1,0 +1,14 @@
+{
+  "resources": {
+    "includes": [
+      {
+        "comment": "Logback config — read at static-init time when the first SLF4J logger is requested.",
+        "pattern": "logback\\.xml"
+      },
+      {
+        "comment": "Picocli's annotation-processor-generated metadata.",
+        "pattern": "META-INF/native-image/picocli-generated/.*"
+      }
+    ]
+  }
+}

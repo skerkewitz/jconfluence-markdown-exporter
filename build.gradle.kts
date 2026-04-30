@@ -1,6 +1,9 @@
 plugins {
     id("java")
     id("application")
+    // Native-image build via the GraalVM native-build-tools plugin.
+    // See https://graalvm.github.io/native-build-tools/latest/gradle-plugin.html
+    id("org.graalvm.buildtools.native") version "0.10.4"
 }
 
 group = "de.skerkewitz"
@@ -19,8 +22,6 @@ application {
     mainClass.set("de.skerkewitz.jcme.App")
     applicationName = "jcme"
     applicationDefaultJvmArgs = listOf(
-        // Silence the JDK 24+ native-access warnings emitted by AppDirs/JNA on first call.
-        "--enable-native-access=ALL-UNNAMED",
         // Force UTF-8 everywhere so German umlauts (and other non-ASCII chars in page
         // titles) don't get mangled by the platform default charset on Windows.
         "-Dfile.encoding=UTF-8",
@@ -49,14 +50,8 @@ dependencies {
     implementation("com.fasterxml.jackson.dataformat:jackson-dataformat-yaml:2.18.2")
     implementation("com.fasterxml.jackson.datatype:jackson-datatype-jsr310:2.18.2")
 
-    // HTML parsing (used in later phases)
+    // HTML parsing
     implementation("org.jsoup:jsoup:1.18.3")
-
-    // Interactive prompts (later phases)
-    implementation("org.jline:jline:3.27.1")
-
-    // OS-specific app data dirs
-    implementation("net.harawata:appdirs:1.4.0")
 
     // Logging
     implementation("org.slf4j:slf4j-api:2.0.16")
@@ -76,4 +71,47 @@ tasks.withType<JavaCompile>().configureEach {
 
 tasks.test {
     useJUnitPlatform()
+}
+
+// ----------------------------------------------------------------------------
+// GraalVM native-image
+// ----------------------------------------------------------------------------
+//
+// Build with `./gradlew nativeCompile`. Requires a GraalVM JDK 21+ on PATH (or
+// JAVA_HOME) — Liberica NIK, Mandrel, or graalvm-ce all work. Output lands at
+// build/native/nativeCompile/jcme(.exe).
+//
+// To regenerate reflection/resource metadata for our own code (e.g. after
+// adding new Jackson-bound records), run the JVM under the tracing agent:
+//   ./gradlew -Pagent run --args="config list"
+// then commit the files written under src/main/resources/META-INF/native-image.
+// ----------------------------------------------------------------------------
+graalvmNative {
+    binaries {
+        named("main") {
+            imageName.set("jcme")
+            mainClass.set("de.skerkewitz.jcme.App")
+            // Don't fall back to the JVM if native compilation hits something it
+            // can't handle — fail loudly instead so we know to add metadata.
+            buildArgs.add("--no-fallback")
+            // We make HTTPS requests to Confluence; make sure the URL handler
+            // is bundled. http kept too in case someone uses it on a LAN install.
+            buildArgs.add("--enable-url-protocols=https,http")
+            // Helpful when something at runtime is missing reflection metadata.
+            buildArgs.add("-H:+UnlockExperimentalVMOptions")
+            buildArgs.add("-H:+ReportExceptionStackTraces")
+            // Force UTF-8 inside the native binary too.
+            buildArgs.add("-Dfile.encoding=UTF-8")
+            buildArgs.add("-Dstdout.encoding=UTF-8")
+            buildArgs.add("-Dstderr.encoding=UTF-8")
+            // Don't ship JVM debug symbols.
+            buildArgs.add("-O2")
+        }
+    }
+    // Pull reachability metadata for popular libraries (Jackson, Logback, ...) from
+    // the GraalVM Reachability Metadata Repository so we don't have to maintain
+    // it by hand.
+    metadataRepository {
+        enabled.set(true)
+    }
 }

@@ -2,12 +2,16 @@ package de.skerkewitz.jcme.cli;
 
 import de.skerkewitz.jcme.api.exceptions.AuthNotConfiguredException;
 import de.skerkewitz.jcme.cli.config.InteractiveMenu;
+import de.skerkewitz.jcme.cli.progress.ProgressUi;
+import de.skerkewitz.jcme.config.AppConfig;
 import de.skerkewitz.jcme.config.ConfigStore;
 import de.skerkewitz.jcme.export.ExportService;
 import de.skerkewitz.jcme.export.ExportStats;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.List;
 import java.util.concurrent.Callable;
 import java.util.function.BiFunction;
@@ -29,10 +33,12 @@ public abstract class ExportCommandBase implements Callable<Integer> {
     @Override
     public Integer call() {
         ConfigStore store = new ConfigStore();
-        ExportService service = new ExportService(store);
+        ProgressUi progress = ProgressUi.detect();
+        ExportService service = new ExportService(store, progress);
+        long started = System.currentTimeMillis();
         try {
             ExportStats stats = exportFunction().apply(service, urls());
-            printSummary(stats);
+            progress.summary(stats, resolveOutputRoot(store), System.currentTimeMillis() - started);
             return stats.failed() > 0 ? 1 : 0;
         } catch (AuthNotConfiguredException e) {
             System.err.println(e.getMessage());
@@ -55,28 +61,9 @@ public abstract class ExportCommandBase implements Callable<Integer> {
         }
     }
 
-    static void printSummary(ExportStats stats) {
-        long total = stats.exported() + stats.skipped() + stats.failed();
-        if (total == 0 && stats.removed() == 0) return;
-
-        StringBuilder out = new StringBuilder();
-        out.append("\n--- Export summary ---\n");
-        out.append("Pages: ").append(stats.total()).append(" total\n");
-        out.append("  Exported: ").append(stats.exported()).append('\n');
-        out.append("  Skipped:  ").append(stats.skipped()).append('\n');
-        if (stats.removed() > 0) out.append("  Removed:  ").append(stats.removed()).append('\n');
-        if (stats.failed() > 0)  out.append("  Failed:   ").append(stats.failed()).append('\n');
-
-        long attTotal = stats.attachmentsExported() + stats.attachmentsSkipped() + stats.attachmentsFailed();
-        if (attTotal > 0 || stats.attachmentsRemoved() > 0) {
-            out.append("Attachments: ").append(attTotal).append(" total\n");
-            out.append("  Exported: ").append(stats.attachmentsExported()).append('\n');
-            out.append("  Skipped:  ").append(stats.attachmentsSkipped()).append('\n');
-            if (stats.attachmentsRemoved() > 0)
-                out.append("  Removed:  ").append(stats.attachmentsRemoved()).append('\n');
-            if (stats.attachmentsFailed() > 0)
-                out.append("  Failed:   ").append(stats.attachmentsFailed()).append('\n');
-        }
-        System.err.print(out);
+    private static Path resolveOutputRoot(ConfigStore store) {
+        AppConfig settings = store.loadEffective();
+        String configured = settings.export().outputPath();
+        return (configured == null || configured.isEmpty()) ? Paths.get("") : Paths.get(configured);
     }
 }

@@ -43,9 +43,9 @@ class ApiDetailsTest {
     @Test
     void deserializes_from_json_with_api_url() throws Exception {
         String json = "{\"username\":\"alice\",\"api_token\":\"t\",\"pat\":\"\",\"cloud_id\":\"\","
-                + "\"api_url\":\"https://confluencews.axa.com\"}";
+                + "\"api_url\":\"https://confluencews.heise.com\"}";
         ApiDetails d = JSON.readValue(json, ApiDetails.class);
-        assertThat(d.apiUrl()).isEqualTo("https://confluencews.axa.com");
+        assertThat(d.apiUrl()).isEqualTo("https://confluencews.heise.com");
     }
 
     @Test
