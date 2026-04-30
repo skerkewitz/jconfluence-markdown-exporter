@@ -24,22 +24,39 @@ already in place and what's deferred.
 
 ## Build
 
-Requires JDK 21 or newer (the Gradle build targets bytecode 21).
+Requires JDK 21 or newer. Both Gradle and Maven build descriptors are provided and produce
+equivalent runnable artifacts.
+
+### Gradle
 
 ```bash
 ./gradlew build         # compile + run all tests
 ./gradlew installDist   # produces build/install/jcme/{bin,lib}
+./gradlew distZip       # build/distributions/jcme-<version>.zip
+./gradlew distTar       # build/distributions/jcme-<version>.tar
 ```
 
 The `jcme` start scripts land in `build/install/jcme/bin/` (Unix shell + Windows `.bat`).
 Add that directory to your `PATH`, or invoke the script directly.
 
-To produce a redistributable archive:
+### Maven
 
 ```bash
-./gradlew distZip       # build/distributions/jcme-<version>.zip
-./gradlew distTar       # build/distributions/jcme-<version>.tar
+mvn package             # compile + test + produce uber-jar at target/jcme-<version>.jar
+mvn test                # tests only
 ```
+
+The Maven build produces a single runnable uber-jar via `maven-shade-plugin`:
+
+```bash
+java --enable-native-access=ALL-UNNAMED -jar target/jcme-0.1.0-SNAPSHOT.jar --help
+```
+
+`--enable-native-access=ALL-UNNAMED` silences a JDK 24+ warning emitted by AppDirs/JNA on
+first call; the Gradle start scripts pass it automatically.
+
+> The two build files are kept in sync by hand. If you change a dependency version,
+> update both [build.gradle.kts](build.gradle.kts) and [pom.xml](pom.xml).
 
 ## First-run setup
 
