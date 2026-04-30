@@ -1,0 +1,257 @@
+# jconfluence-markdown-exporter
+
+A Java port of [confluence-markdown-exporter](https://github.com/Spenhouet/confluence-markdown-exporter)
+by Sebastian Penhouet. Exports Confluence pages, page trees, spaces, or whole organizations
+to Markdown files for Obsidian, GitHub, Azure DevOps, Foam, Dendron, and similar tools.
+
+This port targets feature parity with the Python original; see [Status](#status) for what's
+already in place and what's deferred.
+
+## Highlights
+
+- Confluence Cloud (`*.atlassian.net`), Atlassian API gateway, and self-hosted Server / Data
+  Center URL formats — including context-pathed installs.
+- HTML → Markdown conversion with Confluence-specific extensions: GitHub-style alerts from
+  panel/info/note/tip/warning macros, page-properties macro → YAML front matter, drawio
+  diagrams, PlantUML, page links, attachment links, user mentions, emoticons, task lists,
+  expand container, column layout, jira issue + table macros, ToC, markdown macro.
+- Skip-unchanged via a JSON lockfile keyed by page id + version + export path.
+- Stale-file cleanup: pages deleted in Confluence between runs are removed locally.
+- Parallel page export with a configurable worker pool.
+- Interactive credential setup that pre-fills the URL when an export hits an
+  `AuthNotConfigured` error.
+- Cross-platform: Windows, Linux, macOS.
+
+## Build
+
+Requires JDK 21 or newer (the Gradle build targets bytecode 21).
+
+```bash
+./gradlew build         # compile + run all tests
+./gradlew installDist   # produces build/install/jcme/{bin,lib}
+```
+
+The `jcme` start scripts land in `build/install/jcme/bin/` (Unix shell + Windows `.bat`).
+Add that directory to your `PATH`, or invoke the script directly.
+
+To produce a redistributable archive:
+
+```bash
+./gradlew distZip       # build/distributions/jcme-<version>.zip
+./gradlew distTar       # build/distributions/jcme-<version>.tar
+```
+
+## First-run setup
+
+The CLI is `jcme`. With no arguments it prints help.
+
+```sh
+jcme config              # opens the interactive configuration menu
+```
+
+Or, more concretely: just attempt an export. The tool will detect that auth isn't set up
+and drop you into a credential prompt with the URL pre-filled:
+
+```sh
+jcme pages https://your-company.atlassian.net/wiki/spaces/KEY/pages/123/Some-Page
+```
+
+You'll be prompted for username (your email for Cloud), API token, optional Personal Access
+Token (for self-hosted Server/DC), and Cloud ID (auto-detected for `*.atlassian.net`).
+
+For Atlassian Cloud, generate an API token at
+<https://id.atlassian.com/manage-profile/security/api-tokens>.
+
+## Usage
+
+```sh
+# Single page
+jcme pages https://company.atlassian.net/wiki/spaces/KEY/pages/123/Title
+
+# Multiple pages at once
+jcme pages https://...page1 https://...page2
+
+# Whole page tree (page + descendants)
+jcme pages-with-descendants https://...root-page
+
+# Whole space (homepage + descendants)
+jcme spaces https://company.atlassian.net/wiki/spaces/MYSPACE
+
+# Every space in an organization
+jcme orgs https://company.atlassian.net
+
+# Singular aliases also work: page / page-with-descendants / space / org
+```
+
+Supported page URL formats:
+
+| Form           | Example                                                                                                       |
+| -------------- | ------------------------------------------------------------------------------------------------------------- |
+| Cloud          | `https://company.atlassian.net/wiki/spaces/KEY/pages/123456789/Page+Title`                                    |
+| Cloud gateway  | `https://api.atlassian.com/ex/confluence/CLOUDID/wiki/spaces/KEY/pages/123456789/Page+Title`                  |
+| Server long    | `https://wiki.company.com/display/KEY/Page+Title`                                                             |
+| Server short   | `https://wiki.company.com/KEY/Page+Title`                                                                     |
+| Server `?pageId=` | `https://wiki.company.com/pages/viewpage.action?pageId=123456789`                                          |
+
+## Configuration
+
+The configuration file lives at the OS-standard application config directory:
+
+| OS      | Path                                                                  |
+| ------- | --------------------------------------------------------------------- |
+| Linux   | `~/.config/jconfluence-markdown-exporter/app_data.json`               |
+| macOS   | `~/Library/Application Support/jconfluence-markdown-exporter/app_data.json` |
+| Windows | `%APPDATA%\jconfluence-markdown-exporter\app_data.json`               |
+
+Override the location with `JCME_CONFIG_PATH=/path/to/file.json`.
+
+`jcme config path` prints the resolved path.
+
+### Subcommands
+
+```sh
+jcme config                       # interactive menu
+jcme config list                  # print full config as YAML
+jcme config list -o json          # ... or JSON
+jcme config get export.log_level
+jcme config set export.log_level=DEBUG
+jcme config set export.skip_unchanged=false connection_config.max_workers=5
+jcme config edit auth.confluence  # interactive credential editor
+jcme config reset                 # reset everything (with confirmation)
+jcme config reset export.log_level
+jcme config path
+jcme bugreport                    # version + redacted config for issue reports
+```
+
+`set` accepts JSON values when possible (`true`/`false`/numbers/arrays), otherwise plain
+strings.
+
+### Available config keys
+
+| Key                                       | Default                                                                  | Description                                                                                       |
+| ----------------------------------------- | ------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------- |
+| `export.output_path`                      | `""` (current directory)                                                 | Directory where exported files are saved.                                                         |
+| `export.log_level`                        | `INFO`                                                                   | `DEBUG` / `INFO` / `WARNING` / `ERROR`. `DEBUG` also forces serial export.                        |
+| `export.skip_unchanged`                   | `true`                                                                   | Skip pages whose version + export path match the lockfile.                                        |
+| `export.cleanup_stale`                    | `true`                                                                   | Delete local files whose page was removed from Confluence.                                        |
+| `export.page_path`                        | `{space_name}/{homepage_title}/{ancestor_titles}/{page_title}.md`        | File path template for pages.                                                                     |
+| `export.attachment_path`                  | `{space_name}/attachments/{attachment_file_id}{attachment_extension}`    | File path template for attachments.                                                               |
+| `export.page_href` / `attachment_href`    | `relative`                                                               | Link style: `relative`, `absolute`, or `wiki` (Obsidian-style `[[...]]`).                         |
+| `export.include_document_title`           | `true`                                                                   | Prepend an H1 title to each page.                                                                 |
+| `export.page_breadcrumbs`                 | `true`                                                                   | Include breadcrumb links at the top of each page.                                                 |
+| `export.page_properties_as_front_matter`  | `true`                                                                   | Convert the page-properties macro into YAML front matter.                                         |
+| `export.attachment_export_all`            | `false`                                                                  | Export all attachments instead of only the ones referenced by the page.                           |
+| `export.enable_jira_enrichment`           | `true`                                                                   | Look up Jira issues to enrich Confluence Jira issue links with the issue summary.                 |
+| `export.filename_encoding`                | (Windows-safe map)                                                       | JSON-style char-to-replacement map applied during filename sanitization.                          |
+| `export.filename_length`                  | `255`                                                                    | Maximum filename length.                                                                          |
+| `export.filename_lowercase`               | `false`                                                                  | Force all filenames to lowercase.                                                                 |
+| `export.lockfile_name`                    | `confluence-lock.json`                                                   | Name of the lockfile written under `output_path`.                                                 |
+| `export.existence_check_batch_size`       | `250`                                                                    | Page IDs per existence-check batch (capped to 25 internally for the v1 CQL endpoint).             |
+| `connection_config.max_workers`           | `20`                                                                     | Parallel page-export workers. Set to `1` to force serial mode.                                    |
+| `connection_config.use_v2_api`            | `false`                                                                  | Use Confluence v2 REST endpoints where available (Cloud + DC 8+).                                 |
+| `connection_config.verify_ssl`            | `true`                                                                   | Verify HTTPS certificates.                                                                        |
+| `connection_config.timeout`               | `30`                                                                     | API request timeout in seconds.                                                                   |
+| `connection_config.backoff_and_retry`     | `true`                                                                   | Enable exponential-backoff retry on configured status codes.                                      |
+| `connection_config.backoff_factor`        | `2`                                                                      | Multiplier for backoff between retries.                                                           |
+| `connection_config.max_backoff_seconds`   | `60`                                                                     | Cap on per-attempt backoff sleep.                                                                 |
+| `connection_config.max_backoff_retries`   | `5`                                                                      | Maximum retry attempts.                                                                           |
+| `connection_config.retry_status_codes`    | `[413, 429, 502, 503, 504]`                                              | HTTP status codes that trigger a retry.                                                           |
+| `auth.confluence`                         | `{}`                                                                     | URL-keyed map of credentials. Use `jcme config edit auth.confluence`.                             |
+| `auth.jira`                               | `{}`                                                                     | URL-keyed map of Jira credentials.                                                                |
+
+### Path-template variables
+
+`export.page_path` and `export.attachment_path` use `{var}`-style substitution. Available
+variables:
+
+- `{space_key}`, `{space_name}`
+- `{homepage_id}`, `{homepage_title}`
+- `{ancestor_ids}`, `{ancestor_titles}` (slash-separated)
+- Pages: `{page_id}`, `{page_title}`
+- Attachments: `{attachment_id}`, `{attachment_title}` (without extension),
+  `{attachment_file_id}` (a GUID), `{attachment_extension}` (with leading dot)
+
+Unknown placeholders are left literal.
+
+### Environment variable overrides
+
+Any setting can be overridden with `JCME_<SECTION>__<FIELD>` (note the **double**
+underscore). Values are JSON-parsed first, then fall back to plain strings.
+
+```sh
+JCME_EXPORT__LOG_LEVEL=DEBUG
+JCME_EXPORT__OUTPUT_PATH=/tmp/export
+JCME_CONNECTION_CONFIG__MAX_WORKERS=5
+JCME_CONNECTION_CONFIG__VERIFY_SSL=false
+```
+
+ENV vars override file values for the duration of the run; they are not persisted.
+
+## Status
+
+Phases of the port (see commit history for details):
+
+- ✅ **Phase 0–1**: project skeleton, configuration storage, env-var overlay,
+  `config get/set/list/path/reset`, `bugreport`, `version`.
+- ✅ **Phase 2**: REST client (HTTP/2 via `java.net.http.HttpClient`), URL parsing for
+  Cloud/Server/gateway/`?pageId=` formats, retry/backoff, SSL trust-all toggle,
+  per-base-URL client cache, Cloud-ID auto-fetch.
+- ✅ **Phase 3**: typed records mirroring the Python pydantic models, `ConfluenceFetcher`
+  with cached lookups for pages/spaces/users/Jira issues, MIME → extension table,
+  filename sanitizer, path templates.
+- ✅ **Phase 4–5**: HTML → Markdown converter built on jsoup, Confluence-specific
+  converters for all the macros enumerated above, page renderer that assembles
+  front-matter + breadcrumbs + body + placeholder escaping.
+- ✅ **Phase 6**: end-to-end export pipeline — atomic file writes, per-page worker, lockfile
+  manager, attachment downloader, stale-page cleanup, parallel runner. CLI commands
+  `pages` / `pages-with-descendants` / `spaces` / `orgs` are all wired.
+- ✅ **Phase 8**: interactive configuration menu, including the auth-failure recovery flow
+  that pre-fills the URL and walks the user through credential entry.
+
+Deferred:
+
+- 🚧 **Rich progress UI** (Phase 7). The current summary is plain text; the Python
+  original uses `rich` for a fancier panel.
+- 🚧 **GraalVM native-image build**. Would give native startup speed; needs reflection
+  hints for Jackson + jsoup. Out of scope for first cut.
+
+The Python project's full test fixture set has not been ported; instead the Java tests use
+in-process `HttpServer`-backed integration tests for the export pipeline and unit tests
+for the conversion logic.
+
+## Differences from the Python original
+
+- Java 21 records replace pydantic models.
+- The configuration overlays use `JCME_` instead of `CME_` as the env-var prefix and
+  `jconfluence-markdown-exporter` as the OS app-config directory name. Configuration
+  files are not shared between the two tools.
+- Concurrency uses `Executors.newFixedThreadPool(maxWorkers)` rather than a
+  `ThreadPoolExecutor` with thread-local clients (Java's `HttpClient` is thread-safe so
+  the per-thread cache is unnecessary).
+- The interactive config menu uses simple numbered selections rather than `questionary`'s
+  arrow-key UI; functionally equivalent for the auth setup flow.
+- `rich`-styled console output is replaced with plain text. CI mode (`NO_COLOR` /
+  `CI=true`) doesn't yet have a special branch; output is plain text either way.
+
+## Project layout
+
+```
+src/main/java/de/skerkewitz/jcme/
+├── App.java                  # picocli root command
+├── AppInfo.java              # name + version constants
+├── api/                      # REST client + URL parsing + auth lookup
+├── cli/                      # picocli subcommands
+│   └── config/               # config + interactive menu
+├── config/                   # AppConfig records + ConfigStore
+├── export/                   # Page / attachment / parallel runner / stale cleanup
+├── fetch/                    # ConfluenceFetcher (typed REST → records)
+├── lockfile/                 # ConfluenceLock + LockfileManager
+├── markdown/                 # HTML → Markdown converter + page renderer
+├── model/                    # Page, Space, Attachment, Version, ...
+└── utils/                    # Drawio mermaid extraction
+```
+
+## License
+
+[MIT](LICENSE). The Python original is also MIT-licensed; the original
+copyright remains with Sebastian Penhouet.
