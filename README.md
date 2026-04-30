@@ -42,21 +42,41 @@ Add that directory to your `PATH`, or invoke the script directly.
 ### Maven
 
 ```bash
-mvn package             # compile + test + produce uber-jar at target/jcme-<version>.jar
+mvn package             # compile + test + produce two artifacts (see below)
 mvn test                # tests only
 ```
 
-The Maven build produces a single runnable uber-jar via `maven-shade-plugin`:
+`mvn package` produces two equivalent artifacts:
 
-```bash
-java --enable-native-access=ALL-UNNAMED -jar target/jcme-0.1.0-SNAPSHOT.jar --help
-```
+1. **Launcher scripts** at `target/appassembler/{bin,lib}/` — produced by the
+   `appassembler-maven-plugin`. This is the Maven equivalent of Gradle's `installDist`
+   and gives you a directly-invokable `jcme` command:
 
-`--enable-native-access=ALL-UNNAMED` silences a JDK 24+ warning emitted by AppDirs/JNA on
-first call; the Gradle start scripts pass it automatically.
+   ```bash
+   target/appassembler/bin/jcme --help            # Unix shell
+   target\appassembler\bin\jcme.bat --help        # Windows
+   ```
+
+   Add `target/appassembler/bin/` to your `PATH` to call `jcme` from anywhere. The
+   start scripts already pass `--enable-native-access=ALL-UNNAMED` to silence the JDK
+   24+ JNA warning on first call.
+
+2. **Uber-jar** at `target/jcme-<version>.jar` — produced by `maven-shade-plugin`.
+   Useful for one-off invocations or for handing a single file to a colleague:
+
+   ```bash
+   java --enable-native-access=ALL-UNNAMED -jar target/jcme-0.1.0-SNAPSHOT.jar --help
+   ```
 
 > The two build files are kept in sync by hand. If you change a dependency version,
 > update both [build.gradle.kts](build.gradle.kts) and [pom.xml](pom.xml).
+
+#### GraalVM native-image (true native binary)
+
+A real ahead-of-time-compiled native executable (no JVM at runtime) isn't built out of
+the box: it requires reflection / resource hints for Jackson, jsoup, jline, picocli, and
+the SLF4J service-loader files, plus a working GraalVM toolchain. This is on the roadmap
+but not wired up yet.
 
 ## First-run setup
 

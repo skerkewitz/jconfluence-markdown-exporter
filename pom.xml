@@ -42,6 +42,7 @@
         <maven.surefire.plugin.version>3.5.2</maven.surefire.plugin.version>
         <maven.shade.plugin.version>3.6.0</maven.shade.plugin.version>
         <maven.jar.plugin.version>3.4.2</maven.jar.plugin.version>
+        <appassembler.plugin.version>2.1.0</appassembler.plugin.version>
     </properties>
 
     <dependencies>
@@ -218,6 +219,42 @@
                                     </excludes>
                                 </filter>
                             </filters>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!--
+                Produce launcher scripts target/appassembler/bin/jcme (Unix) and jcme.bat (Windows)
+                with all dependencies under target/appassembler/lib/. This is the Maven equivalent
+                of Gradle's `installDist` task: a directory you can drop on PATH and call `jcme`
+                directly, no `java -jar` boilerplate.
+            -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>appassembler-maven-plugin</artifactId>
+                <version>${appassembler.plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>assemble-cli</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>assemble</goal>
+                        </goals>
+                        <configuration>
+                            <repositoryLayout>flat</repositoryLayout>
+                            <repositoryName>lib</repositoryName>
+                            <programs>
+                                <program>
+                                    <id>jcme</id>
+                                    <mainClass>${main.class}</mainClass>
+                                    <jvmSettings>
+                                        <extraArguments>
+                                            <extraArgument>--enable-native-access=ALL-UNNAMED</extraArgument>
+                                        </extraArguments>
+                                    </jvmSettings>
+                                </program>
+                            </programs>
                         </configuration>
                     </execution>
                 </executions>
