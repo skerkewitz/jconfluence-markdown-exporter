@@ -18,8 +18,15 @@ repositories {
 application {
     mainClass.set("de.skerkewitz.jcme.App")
     applicationName = "jcme"
-    // Silence the JDK 24+ native-access warnings emitted by AppDirs/JNA on first call.
-    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
+    applicationDefaultJvmArgs = listOf(
+        // Silence the JDK 24+ native-access warnings emitted by AppDirs/JNA on first call.
+        "--enable-native-access=ALL-UNNAMED",
+        // Force UTF-8 everywhere so German umlauts (and other non-ASCII chars in page
+        // titles) don't get mangled by the platform default charset on Windows.
+        "-Dfile.encoding=UTF-8",
+        "-Dstdout.encoding=UTF-8",
+        "-Dstderr.encoding=UTF-8"
+    )
 }
 
 tasks.jar {

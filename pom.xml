@@ -251,6 +251,9 @@
                                     <jvmSettings>
                                         <extraArguments>
                                             <extraArgument>--enable-native-access=ALL-UNNAMED</extraArgument>
+                                            <extraArgument>-Dfile.encoding=UTF-8</extraArgument>
+                                            <extraArgument>-Dstdout.encoding=UTF-8</extraArgument>
+                                            <extraArgument>-Dstderr.encoding=UTF-8</extraArgument>
                                         </extraArguments>
                                     </jvmSettings>
                                 </program>

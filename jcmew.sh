@@ -26,4 +26,9 @@ if [[ -z "$JAR" ]]; then
     exit 1
 fi
 
-exec java --enable-native-access=ALL-UNNAMED -jar "$JAR" "$@"
+exec java \
+    --enable-native-access=ALL-UNNAMED \
+    -Dfile.encoding=UTF-8 \
+    -Dstdout.encoding=UTF-8 \
+    -Dstderr.encoding=UTF-8 \
+    -jar "$JAR" "$@"

@@ -125,6 +125,45 @@ To redirect logs to a file, just use shell redirection:
 jcme pages …  2> jcme.log
 ```
 
+## Troubleshooting
+
+### German umlauts (or other non-ASCII characters) look broken
+
+The exported **markdown files are always UTF-8**. If you see broken characters on the
+console (e.g. `Ã¤` instead of `ä`, or `?` placeholders) but the actual `.md` files look
+correct in a UTF-8-aware editor (VS Code, Notepad++ in UTF-8 mode, IntelliJ), the data
+is fine — only the terminal is displaying it wrong.
+
+**Windows (cmd.exe / PowerShell)**: run this once per shell session before using `jcme`:
+
+```cmd
+chcp 65001
+```
+
+Then your console will render UTF-8 output correctly. To make it permanent for future
+sessions, configure the console / Windows Terminal to use UTF-8 by default
+(*Settings → Profiles → Defaults → Advanced → "Use Unicode UTF-8 for worldwide language
+support"* in newer Windows builds).
+
+**Linux / macOS**: usually fine out of the box. If not, ensure your locale is UTF-8:
+
+```sh
+echo $LANG       # should end in .UTF-8, e.g. en_US.UTF-8 or de_DE.UTF-8
+```
+
+The JVM is already started with `-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8
+-Dstderr.encoding=UTF-8` by every entry point (Gradle start scripts, Maven appassembler
+scripts, `jcmew.sh`/`jcmew.bat`), and Logback writes UTF-8 bytes to stderr. So if the
+output is wrong, the cause is downstream (your terminal codepage), not jcme.
+
+**Verify**: open an exported `.md` file in VS Code with the encoding indicator at the
+bottom right showing "UTF-8". If umlauts look correct in the file but wrong on the
+console, it's purely a terminal problem.
+
+### Export hangs
+
+See the [Logging](#logging) section above — the last INFO line tells you where.
+
 ## First-run setup
 
 The CLI is `jcme`. With no arguments it prints help.

@@ -19,5 +19,11 @@ if not defined JAR (
     exit /b 1
 )
 
-java --enable-native-access=ALL-UNNAMED -jar "%JAR%" %*
+rem Force UTF-8 in the JVM. cmd.exe console codepage may still need 'chcp 65001'
+rem for umlauts to render correctly in the terminal — see README.
+java --enable-native-access=ALL-UNNAMED ^
+    -Dfile.encoding=UTF-8 ^
+    -Dstdout.encoding=UTF-8 ^
+    -Dstderr.encoding=UTF-8 ^
+    -jar "%JAR%" %*
 exit /b %ERRORLEVEL%

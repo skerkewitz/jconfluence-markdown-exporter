@@ -3,11 +3,16 @@
         Logback writes everything to stderr. The level is INFO by default; jcme overrides it
         at startup based on export.log_level (set via 'jcme config set export.log_level=DEBUG'
         or JCME_EXPORT__LOG_LEVEL=DEBUG). See de.skerkewitz.jcme.Logging.
+
+        We force UTF-8 on the encoder so log lines containing non-ASCII characters
+        (e.g. German umlauts in Confluence page titles) don't get mangled by the
+        platform default charset on Windows.
     -->
     <appender name="STDERR" class="ch.qos.logback.core.ConsoleAppender">
         <target>System.err</target>
         <encoder>
             <pattern>%d{HH:mm:ss.SSS} %-5level %logger{36} - %msg%n</pattern>
+            <charset>UTF-8</charset>
         </encoder>
     </appender>
 
