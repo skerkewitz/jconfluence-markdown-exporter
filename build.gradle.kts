@@ -18,6 +18,18 @@ repositories {
 application {
     mainClass.set("de.skerkewitz.jcme.App")
     applicationName = "jcme"
+    // Silence the JDK 24+ native-access warnings emitted by AppDirs/JNA on first call.
+    applicationDefaultJvmArgs = listOf("--enable-native-access=ALL-UNNAMED")
+}
+
+tasks.jar {
+    manifest {
+        attributes(
+            "Implementation-Title" to "jconfluence-markdown-exporter",
+            "Implementation-Version" to project.version,
+            "Main-Class" to "de.skerkewitz.jcme.App"
+        )
+    }
 }
 
 dependencies {
