@@ -139,12 +139,17 @@ public final class InteractiveMenu {
         String pat      = prompt.secret("Personal Access Token (used for Server/DC; leave blank if using API token)");
         String cloudId  = prompt.text("Cloud ID (auto-detected for *.atlassian.net; usually leave blank)",
                 currentSecret(service, url, "cloud_id"));
+        String apiUrl   = prompt.text(
+                "REST API URL (only set if the API is on a different host than the page URL; "
+                        + "e.g. https://confluencews.example.com)",
+                currentSecret(service, url, "api_url"));
 
         try {
             store.setByKeys(List.of("auth", service, url, "username"), username);
             if (!apiToken.isEmpty()) store.setByKeys(List.of("auth", service, url, "api_token"), apiToken);
             if (!pat.isEmpty())      store.setByKeys(List.of("auth", service, url, "pat"), pat);
             store.setByKeys(List.of("auth", service, url, "cloud_id"), cloudId);
+            store.setByKeys(List.of("auth", service, url, "api_url"), apiUrl);
             prompt.println("Saved.");
         } catch (ConfigException e) {
             prompt.println("Failed to save: " + e.getMessage());

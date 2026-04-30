@@ -103,6 +103,69 @@ class ApiClientFactoryTest {
         assertThat(factory.tryFetchCloudId(server.baseUrl())).isNull();
     }
 
+    @Test
+    void api_url_override_routes_rest_calls_to_alternative_host(@TempDir Path tmp) throws Exception {
+        // Two TestHttpServers: one acts as the page-URL host (no REST endpoints),
+        // the second acts as the REST API host. We register auth keyed by the
+        // page-URL host but with api_url pointing at the REST host.
+        try (TestHttpServer pageHost = new TestHttpServer();
+             TestHttpServer apiHost = new TestHttpServer()) {
+
+            Path cfg = tmp.resolve("cfg.json");
+            ConfigStore store = new ConfigStore(cfg, Map.of());
+            Map<String, ApiDetails> instances = new LinkedHashMap<>();
+            instances.put(pageHost.baseUrl(), new ApiDetails(
+                    "alice", "tok", "", "", apiHost.baseUrl()));
+            store.save(new AppConfig(
+                    ExportConfig.defaults(),
+                    new ConnectionConfig(false, 1, 0, 0, List.of(), false, 5, false, 1),
+                    new AuthConfig(instances, new LinkedHashMap<>())));
+
+            // verifyAuth() should hit the API host, not the page host.
+            apiHost.onGet("/rest/api/space", 200, "{\"results\":[]}", Map.of());
+
+            ApiClientFactory factory = new ApiClientFactory(store);
+            ConfluenceClient client = factory.getConfluence(pageHost.baseUrl());
+
+            assertThat(client.baseUrl()).isEqualTo(apiHost.baseUrl());
+            assertThat(apiHost.hits("/rest/api/space")).isEqualTo(1);
+            assertThat(pageHost.hits("/rest/api/space")).isZero();
+        }
+    }
+
+    @Test
+    void api_url_override_skips_cloud_id_probe(@TempDir Path tmp) throws Exception {
+        try (TestHttpServer pageHost = new TestHttpServer();
+             TestHttpServer apiHost = new TestHttpServer()) {
+
+            Path cfg = tmp.resolve("cfg.json");
+            ConfigStore store = new ConfigStore(cfg, Map.of());
+            Map<String, ApiDetails> instances = new LinkedHashMap<>();
+            // Use a page host that LOOKS like Atlassian Cloud (.atlassian.net) so the probe
+            // would otherwise trigger; the api_url override should suppress it.
+            // We can't bind to that hostname so we use it only as a config key with no
+            // actual reachability. The probe target gets a 5s timeout — without the
+            // skip, this test would take 5 s instead of milliseconds.
+            String fakePageHost = "https://x.atlassian.net";
+            instances.put(fakePageHost, new ApiDetails(
+                    "alice", "tok", "", "", apiHost.baseUrl()));
+            store.save(new AppConfig(
+                    ExportConfig.defaults(),
+                    new ConnectionConfig(false, 1, 0, 0, List.of(), false, 5, false, 1),
+                    new AuthConfig(instances, new LinkedHashMap<>())));
+
+            apiHost.onGet("/rest/api/space", 200, "{\"results\":[]}", Map.of());
+
+            ApiClientFactory factory = new ApiClientFactory(store);
+            long started = System.currentTimeMillis();
+            factory.getConfluence(fakePageHost);
+            long elapsed = System.currentTimeMillis() - started;
+
+            // Should be much faster than the 5-second cloud-id probe timeout.
+            assertThat(elapsed).isLessThan(2_000);
+        }
+    }
+
     private ConfigStore configWithAuth(Path tmp, String url) {
         Path cfg = tmp.resolve("cfg.json");
         ConfigStore store = new ConfigStore(cfg, Map.of());

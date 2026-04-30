@@ -141,10 +141,37 @@ jcme pages https://your-company.atlassian.net/wiki/spaces/KEY/pages/123/Some-Pag
 ```
 
 You'll be prompted for username (your email for Cloud), API token, optional Personal Access
-Token (for self-hosted Server/DC), and Cloud ID (auto-detected for `*.atlassian.net`).
+Token (for self-hosted Server/DC), Cloud ID (auto-detected for `*.atlassian.net`), and a
+REST API URL override (only relevant for split-host deployments — see below).
 
 For Atlassian Cloud, generate an API token at
 <https://id.atlassian.com/manage-profile/security/api-tokens>.
+
+### Split-host deployments (REST API on a different host than the page URL)
+
+Some corporate Confluence installations serve the HTML frontend and the REST API from
+different hostnames behind a reverse proxy. Example:
+
+| What            | URL                                                                |
+| --------------- | ------------------------------------------------------------------ |
+| HTML page URL   | `https://confluence.axa.com/confluence/spaces/DEITGW/pages/345/X`  |
+| REST API URL    | `https://confluencews.axa.com`                                     |
+
+In that case, configure auth keyed by the **page URL host** (so URL parsing keeps working
+for the URLs you paste from the browser), and set `api_url` to the **REST API host**.
+The interactive menu prompts for it after Cloud ID:
+
+```sh
+jcme config edit auth.confluence
+# → "Edit credentials" on the existing entry, or "Add new instance"
+# → REST API URL (only set if the API is on a different host than the page URL):
+#   https://confluencews.axa.com
+```
+
+When `api_url` is set, jcme uses that hostname for every REST call (page fetches,
+attachment downloads, CQL searches) while still recognizing the page-URL host on the
+command line. The cloud-id auto-probe is skipped — it's a deliberate signal that you're
+not on Atlassian Cloud's standard topology.
 
 ## Usage
 

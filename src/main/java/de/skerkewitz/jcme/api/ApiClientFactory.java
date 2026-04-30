@@ -58,7 +58,11 @@ public final class ApiClientFactory {
         }
         ApiDetails details = auth.get();
 
-        if ((details.cloudId() == null || details.cloudId().isEmpty())
+        // api_url override skips the cloud-id probe — it's a deliberate "REST is over there" hint.
+        boolean hasApiUrlOverride = details.apiUrl() != null && !details.apiUrl().isEmpty();
+
+        if (!hasApiUrlOverride
+                && (details.cloudId() == null || details.cloudId().isEmpty())
                 && UrlParsing.isStandardAtlassianCloudUrl(normalized)) {
             LOG.info("Probing {}/_edge/tenant_info to auto-detect Cloud ID (5s timeout)", normalized);
             String cloudId = tryFetchCloudId(normalized);
@@ -72,9 +76,15 @@ public final class ApiClientFactory {
             }
         }
 
-        String sdkUrl = (details.cloudId() != null && !details.cloudId().isEmpty())
-                ? UrlParsing.buildGatewayUrl("confluence", details.cloudId())
-                : normalized;
+        String sdkUrl;
+        if (hasApiUrlOverride) {
+            sdkUrl = UrlParsing.normalizeInstanceUrl(details.apiUrl());
+            LOG.info("Using configured api_url {} for REST calls (page host: {})", sdkUrl, normalized);
+        } else if (details.cloudId() != null && !details.cloudId().isEmpty()) {
+            sdkUrl = UrlParsing.buildGatewayUrl("confluence", details.cloudId());
+        } else {
+            sdkUrl = normalized;
+        }
         LOG.info("Verifying Confluence credentials against {} (timeout {}s)",
                 sdkUrl, settings.connectionConfig().timeout());
         HttpExecutor http = new HttpExecutor(details, settings.connectionConfig());
@@ -110,7 +120,10 @@ public final class ApiClientFactory {
         }
         ApiDetails details = auth.get();
 
-        if ((details.cloudId() == null || details.cloudId().isEmpty())
+        boolean hasApiUrlOverride = details.apiUrl() != null && !details.apiUrl().isEmpty();
+
+        if (!hasApiUrlOverride
+                && (details.cloudId() == null || details.cloudId().isEmpty())
                 && UrlParsing.isStandardAtlassianCloudUrl(normalized)) {
             String cloudId = tryFetchCloudId(normalized);
             if (cloudId != null) {
@@ -121,9 +134,15 @@ public final class ApiClientFactory {
             }
         }
 
-        String sdkUrl = (details.cloudId() != null && !details.cloudId().isEmpty())
-                ? UrlParsing.buildGatewayUrl("jira", details.cloudId())
-                : normalized;
+        String sdkUrl;
+        if (hasApiUrlOverride) {
+            sdkUrl = UrlParsing.normalizeInstanceUrl(details.apiUrl());
+            LOG.info("Using configured api_url {} for Jira REST calls (page host: {})", sdkUrl, normalized);
+        } else if (details.cloudId() != null && !details.cloudId().isEmpty()) {
+            sdkUrl = UrlParsing.buildGatewayUrl("jira", details.cloudId());
+        } else {
+            sdkUrl = normalized;
+        }
         HttpExecutor http = new HttpExecutor(details, settings.connectionConfig());
         JiraClient client = new JiraClient(sdkUrl, http);
         try {

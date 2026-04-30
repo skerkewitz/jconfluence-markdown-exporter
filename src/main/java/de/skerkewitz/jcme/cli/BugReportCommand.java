@@ -53,7 +53,7 @@ public class BugReportCommand implements Runnable {
                     String url = entry.getKey();
                     JsonNode details = entry.getValue();
                     if (details instanceof ObjectNode detailsObj) {
-                        for (String secret : new String[]{"api_token", "pat", "username", "cloud_id"}) {
+                        for (String secret : new String[]{"api_token", "pat", "username", "cloud_id", "api_url"}) {
                             JsonNode v = detailsObj.get(secret);
                             if (v != null && !v.asText().isEmpty()) {
                                 detailsObj.put(secret, REDACTED);
