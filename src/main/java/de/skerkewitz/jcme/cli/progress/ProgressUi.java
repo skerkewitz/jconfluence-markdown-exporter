@@ -6,6 +6,7 @@ import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.util.Locale;
 
 /**
  * User-facing progress reporter for export runs.
@@ -94,7 +95,7 @@ public final class ProgressUi {
             case FAILED -> red(ansi ? "✗" : "[fail]");
         };
         String time = elapsedMs >= 0 ? dim(" " + formatMs(elapsedMs)) : "";
-        out.printf("  %s [%d/%d] %s (id=%d)%s%n", glyph, done, total, ellipsize(title, 60), pageId, time);
+        out.printf(Locale.ROOT, "  %s [%d/%d] %s (id=%d)%s%n", glyph, done, total, ellipsize(title, 60), pageId, time);
         out.flush();
     }
 
@@ -223,9 +224,11 @@ public final class ProgressUi {
     static String formatMs(long ms) {
         if (ms < 1000) return ms + " ms";
         double s = ms / 1000.0;
-        if (s < 60) return String.format("%.1fs", s);
+        // Locale.ROOT pins the decimal separator to '.' so the output is identical
+        // on machines with German / French / etc. regional settings.
+        if (s < 60) return String.format(Locale.ROOT, "%.1fs", s);
         long total = ms / 1000;
-        return String.format("%dm %02ds", total / 60, total % 60);
+        return String.format(Locale.ROOT, "%dm %02ds", total / 60, total % 60);
     }
 
     public enum Outcome { EXPORTED, SKIPPED, FAILED }

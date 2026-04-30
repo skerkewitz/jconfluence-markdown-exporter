@@ -128,6 +128,21 @@ class ProgressUiTest {
     }
 
     @Test
+    void format_ms_uses_dot_decimal_separator_under_german_locale() {
+        // Reproduces a real bug report: on machines with a German regional format
+        // (Locale.GERMANY uses ',' as the decimal separator), `String.format("%.1fs", ...)`
+        // produces "1,5s" unless we explicitly pin Locale.ROOT.
+        java.util.Locale before = java.util.Locale.getDefault();
+        try {
+            java.util.Locale.setDefault(java.util.Locale.GERMANY);
+            assertThat(ProgressUi.formatMs(1_500)).isEqualTo("1.5s");
+            assertThat(ProgressUi.formatMs(12_345)).isEqualTo("12.3s");
+        } finally {
+            java.util.Locale.setDefault(before);
+        }
+    }
+
+    @Test
     void ellipsize_truncates_long_strings() {
         assertThat(ProgressUi.ellipsize("hello world", 5)).isEqualTo("hell…");
         assertThat(ProgressUi.ellipsize("short", 100)).isEqualTo("short");
