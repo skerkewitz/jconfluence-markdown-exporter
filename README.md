@@ -4,8 +4,7 @@ A Java port of [confluence-markdown-exporter](https://github.com/Spenhouet/confl
 by Sebastian Penhouet. Exports Confluence pages, page trees, spaces, or whole organizations
 to Markdown files for Obsidian, GitHub, Azure DevOps, Foam, Dendron, and similar tools.
 
-This port targets feature parity with the Python original; see [Status](#status) for what's
-already in place and what's deferred.
+This port targets feature parity with the Python original.
 
 ## Highlights
 
