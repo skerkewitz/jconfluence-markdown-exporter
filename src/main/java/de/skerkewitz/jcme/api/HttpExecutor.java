@@ -79,10 +79,10 @@ public final class HttpExecutor {
                             request.method(), request.uri(), status, elapsed);
                     return response;
                 }
-                long sleepSeconds = backoffSeconds(attempt);
+                Duration backoff = backoffDuration(attempt);
                 LOG.warn("HTTP {} from {} after {} ms — retrying in {}s (attempt {}/{})",
-                        status, request.uri(), elapsed, sleepSeconds, attempt + 1, maxAttempts);
-                sleep(sleepSeconds);
+                        status, request.uri(), elapsed, backoff.toSeconds(), attempt + 1, maxAttempts);
+                sleep(backoff);
             } catch (IOException | InterruptedException e) {
                 long elapsed = System.currentTimeMillis() - started;
                 lastError.set(e);
@@ -95,10 +95,10 @@ public final class HttpExecutor {
                             request.uri(), elapsed, e.getMessage());
                     throw new ApiException("Network error contacting " + request.uri(), e);
                 }
-                long sleepSeconds = backoffSeconds(attempt);
+                Duration backoff = backoffDuration(attempt);
                 LOG.warn("Network error for {} after {} ms — retrying in {}s (attempt {}/{}): {}",
-                        request.uri(), elapsed, sleepSeconds, attempt + 1, maxAttempts, e.getMessage());
-                sleep(sleepSeconds);
+                        request.uri(), elapsed, backoff.toSeconds(), attempt + 1, maxAttempts, e.getMessage());
+                sleep(backoff);
             }
         }
         Exception err = lastError.get();
@@ -106,14 +106,14 @@ public final class HttpExecutor {
                 err != null ? err : new RuntimeException("unknown"));
     }
 
-    private long backoffSeconds(int attempt) {
+    private Duration backoffDuration(int attempt) {
         long base = (long) Math.pow(conn.backoffFactor(), attempt);
-        return Math.min(base, conn.maxBackoffSeconds());
+        return Duration.ofSeconds(Math.min(base, conn.maxBackoffSeconds()));
     }
 
-    private void sleep(long seconds) {
+    private void sleep(Duration duration) {
         try {
-            Thread.sleep(seconds * 1000L);
+            Thread.sleep(duration.toMillis());
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
             throw new ApiException("Interrupted while sleeping for backoff", e);
@@ -122,10 +122,10 @@ public final class HttpExecutor {
 
     private void applyAuth(HttpRequest.Builder builder) {
         if (auth == null) return;
-        if (notBlank(auth.pat())) {
-            builder.header("Authorization", "Bearer " + auth.pat());
-        } else if (notBlank(auth.username()) && notBlank(auth.apiToken())) {
-            String creds = auth.username() + ":" + auth.apiToken();
+        if (auth.pat().isPresent()) {
+            builder.header("Authorization", "Bearer " + auth.pat().reveal());
+        } else if (notBlank(auth.username()) && auth.apiToken().isPresent()) {
+            String creds = auth.username() + ":" + auth.apiToken().reveal();
             String encoded = Base64.getEncoder().encodeToString(creds.getBytes(java.nio.charset.StandardCharsets.UTF_8));
             builder.header("Authorization", "Basic " + encoded);
         }

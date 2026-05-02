@@ -77,7 +77,7 @@ public final class PageExporter {
     }
 
     private Map<String, AttachmentEntry> exportAttachments(Page page, RenderingContext rc) {
-        Map<String, AttachmentEntry> oldEntries = lockfile.attachmentEntriesForPage(String.valueOf(page.id()));
+        Map<String, AttachmentEntry> oldEntries = lockfile.attachmentEntriesForPage(page.id());
         Map<String, AttachmentEntry> newEntries = new LinkedHashMap<>();
         ConfluenceClient client = fetcher.apiFactory().getConfluence(page.baseUrl());
 

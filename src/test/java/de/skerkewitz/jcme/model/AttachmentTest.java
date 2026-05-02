@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.model;
 
+import de.skerkewitz.jcme.api.BaseUrl;
 import org.junit.jupiter.api.Test;
 
 import java.util.List;
@@ -8,12 +9,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class AttachmentTest {
 
+    private static final BaseUrl BASE = BaseUrl.of("https://x.atlassian.net");
+
     private static Attachment make(String mediaType, String comment, String title, String fileId) {
         return new Attachment(
-                "https://x.atlassian.net",
+                BASE,
                 "att1",
                 title,
-                Space.empty("https://x.atlassian.net"),
+                Space.empty(BASE),
                 List.of(),
                 Version.empty(),
                 42L,

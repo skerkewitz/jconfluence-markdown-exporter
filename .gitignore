@@ -33,7 +33,7 @@ bin/
 /nbproject/private/
 /nbbuild/
 /dist/
-/nbdist/N
+/nbdist/
 /.nb-gradle/
 
 ### VS Code ###
@@ -43,3 +43,6 @@ bin/
 .DS_Store
 
 /org_project/
+
+target/
+

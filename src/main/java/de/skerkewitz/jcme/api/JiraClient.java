@@ -22,9 +22,9 @@ public class JiraClient extends RestClient {
         super(baseUrl, http);
     }
 
-    public JsonNode getIssue(String key) {
+    public JsonNode getIssue(de.skerkewitz.jcme.model.IssueKey key) {
         return getJsonChecked("/rest/api/2/issue/" + java.net.URLEncoder.encode(
-                key, java.nio.charset.StandardCharsets.UTF_8));
+                key.value(), java.nio.charset.StandardCharsets.UTF_8));
     }
 
     public JsonNode getAllProjects() {

@@ -1,6 +1,7 @@
 package de.skerkewitz.jcme.export;
 
 import de.skerkewitz.jcme.api.ApiClientFactory;
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.cli.progress.ProgressUi;
 import de.skerkewitz.jcme.config.AppConfig;
 import de.skerkewitz.jcme.config.ConfigStore;
@@ -12,6 +13,7 @@ import de.skerkewitz.jcme.model.Descendant;
 import de.skerkewitz.jcme.model.ExportablePage;
 import de.skerkewitz.jcme.model.Organization;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -73,7 +75,7 @@ public final class ExportService {
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
         progress.phase("Resolving " + urls.size() + " page URL(s)");
-        Set<String> seenBaseUrls = new LinkedHashSet<>();
+        Set<BaseUrl> seenBaseUrls = new LinkedHashSet<>();
         List<Page> pages = new ArrayList<>();
         for (String url : urls) {
             progress.status(url);
@@ -96,7 +98,7 @@ public final class ExportService {
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
         progress.phase("Resolving " + urls.size() + " page URL(s) + descendants");
-        Set<String> seenBaseUrls = new LinkedHashSet<>();
+        Set<BaseUrl> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String url : urls) {
             progress.status(url);
@@ -120,7 +122,7 @@ public final class ExportService {
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
         progress.phase("Resolving " + urls.size() + " space URL(s)");
-        Set<String> seenBaseUrls = new LinkedHashSet<>();
+        Set<BaseUrl> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String url : urls) {
             progress.status(url);
@@ -143,11 +145,11 @@ public final class ExportService {
         LockfileManager lockfile = newLockfile(settings, outputRoot);
 
         progress.phase("Listing spaces in " + baseUrls.size() + " organization(s)");
-        Set<String> seenBaseUrls = new LinkedHashSet<>();
+        Set<BaseUrl> seenBaseUrls = new LinkedHashSet<>();
         List<ExportablePage> targets = new ArrayList<>();
         for (String baseUrl : baseUrls) {
             progress.status(baseUrl);
-            Organization org = fetcher.resolveOrganizationFromUrl(baseUrl);
+            Organization org = fetcher.resolveOrganizationFromUrl(BaseUrl.of(baseUrl));
             seenBaseUrls.add(org.baseUrl());
             for (Space space : org.spaces()) collectSpacePages(space, targets);
         }
@@ -165,7 +167,7 @@ public final class ExportService {
                     space.name(), space.key());
             return;
         }
-        Page homepage = fetcher.getPage(space.homepage(), space.baseUrl());
+        Page homepage = fetcher.getPage(PageId.of(space.homepage()), space.baseUrl());
         out.add(homepage);
         for (Descendant d : fetcher.getDescendants(homepage)) out.add(d);
     }
@@ -194,7 +196,7 @@ public final class ExportService {
             progress.phase("All " + targets.size() + " page(s) unchanged — nothing to export");
             return;
         }
-        boolean serial = "DEBUG".equalsIgnoreCase(settings.export().logLevel())
+        boolean serial = settings.export().logLevel() == de.skerkewitz.jcme.config.LogLevel.DEBUG
                 || settings.connectionConfig().maxWorkers() <= 1;
         String phaseLabel = "Exporting " + toExport.size() + " page(s) "
                 + (serial ? "serially" : "in parallel (" + settings.connectionConfig().maxWorkers() + " workers)")
@@ -211,18 +213,18 @@ public final class ExportService {
         runner.run(toExport, stats);
     }
 
-    private void runCleanup(AppConfig settings, LockfileManager lockfile, Set<String> baseUrls,
+    private void runCleanup(AppConfig settings, LockfileManager lockfile, Set<BaseUrl> baseUrls,
                             ExportStats stats) {
         if (!settings.export().cleanupStale()) return;
         StaleCleanup cleanup = new StaleCleanup(apiFactory, settings);
-        for (String baseUrl : baseUrls) {
-            Set<String> unseen = lockfile.unseenIds();
+        for (BaseUrl baseUrl : baseUrls) {
+            Set<PageId> unseen = lockfile.unseenIds();
             if (unseen.isEmpty()) continue;
             progress.phase("Checking " + unseen.size() + " unseen page(s) for removal");
-            List<String> sorted = new ArrayList<>(unseen);
-            sorted.sort(String::compareTo);
-            progress.status(baseUrl);
-            Set<String> deleted = cleanup.fetchDeletedPageIds(sorted, baseUrl);
+            List<PageId> sorted = new ArrayList<>(unseen);
+            sorted.sort((a, b) -> a.toString().compareTo(b.toString()));
+            progress.status(baseUrl.value());
+            Set<PageId> deleted = cleanup.fetchDeletedPageIds(sorted, baseUrl);
             progress.clearStatus();
             if (!deleted.isEmpty()) {
                 LOG.info("Removing {} stale page(s) from local export.", deleted.size());

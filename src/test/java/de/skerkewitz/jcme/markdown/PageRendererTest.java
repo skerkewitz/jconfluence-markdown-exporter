@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.markdown;
 
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.config.ExportConfig;
 import de.skerkewitz.jcme.export.FilenameSanitizer;
 import de.skerkewitz.jcme.export.TemplateVars;
@@ -7,6 +8,7 @@ import de.skerkewitz.jcme.fetch.ConfluenceFetcher;
 import de.skerkewitz.jcme.model.Ancestor;
 import de.skerkewitz.jcme.model.Label;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 import de.skerkewitz.jcme.model.Version;
 import org.junit.jupiter.api.Test;
@@ -19,12 +21,12 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class PageRendererTest {
 
-    private static final String BASE_URL = "https://x.atlassian.net";
+    private static final BaseUrl BASE_URL = BaseUrl.of("https://x.atlassian.net");
 
     private static class TestFetcher extends ConfluenceFetcher {
-        final Map<Long, Page> pages = new HashMap<>();
+        final Map<PageId, Page> pages = new HashMap<>();
         TestFetcher() { super(null, null); }
-        @Override public Page getPage(long pageId, String baseUrl) {
+        @Override public Page getPage(PageId pageId, BaseUrl baseUrl) {
             Page p = pages.get(pageId);
             return p != null ? p : Page.inaccessible(pageId, baseUrl);
         }
@@ -35,13 +37,13 @@ class PageRendererTest {
     }
 
     private static Space space(String key, String name) {
-        return new Space(BASE_URL, key, name, "", null);
+        return new Space(BASE_URL, de.skerkewitz.jcme.model.SpaceKey.of(key), name, "", null);
     }
 
     @Test
     void title_is_prepended_when_include_document_title_is_true() {
         Space s = space("K", "Space");
-        Page p = new Page(BASE_URL, 1, "Hello World", s, List.of(), Version.empty(),
+        Page p = new Page(BASE_URL, PageId.of(1), "Hello World", s, List.of(), Version.empty(),
                 "<p>body</p>", "", "", List.of(), List.of());
 
         String md = renderer(ExportConfig.defaults(), new TestFetcher()).render(p);
@@ -53,7 +55,7 @@ class PageRendererTest {
     @Test
     void title_is_omitted_when_include_document_title_is_false() {
         Space s = space("K", "Space");
-        Page p = new Page(BASE_URL, 1, "Hello World", s, List.of(), Version.empty(),
+        Page p = new Page(BASE_URL, PageId.of(1), "Hello World", s, List.of(), Version.empty(),
                 "<p>body</p>", "", "", List.of(), List.of());
 
         ExportConfig disabled = withIncludeTitle(false);
@@ -66,7 +68,7 @@ class PageRendererTest {
     @Test
     void labels_become_tags_in_front_matter() {
         Space s = space("K", "Space");
-        Page p = new Page(BASE_URL, 1, "T", s, List.of(), Version.empty(),
+        Page p = new Page(BASE_URL, PageId.of(1), "T", s, List.of(), Version.empty(),
                 "<p>x</p>", "", "",
                 List.of(new Label("1", "alpha", "g"), new Label("2", "beta", "g")),
                 List.of());
@@ -82,15 +84,15 @@ class PageRendererTest {
     @Test
     void breadcrumbs_link_each_ancestor() {
         Space s = space("K", "Space");
-        Page top = new Page(BASE_URL, 10, "Top", s, List.of(), Version.empty(), "", "", "", List.of(), List.of());
-        Page mid = new Page(BASE_URL, 20, "Mid", s, List.of(), Version.empty(), "", "", "", List.of(), List.of());
+        Page top = new Page(BASE_URL, PageId.of(10), "Top", s, List.of(), Version.empty(), "", "", "", List.of(), List.of());
+        Page mid = new Page(BASE_URL, PageId.of(20), "Mid", s, List.of(), Version.empty(), "", "", "", List.of(), List.of());
         TestFetcher fetcher = new TestFetcher();
-        fetcher.pages.put(10L, top);
-        fetcher.pages.put(20L, mid);
+        fetcher.pages.put(PageId.of(10L), top);
+        fetcher.pages.put(PageId.of(20L), mid);
 
-        Ancestor a1 = new Ancestor(BASE_URL, 10, "Top", s, List.of(), Version.empty());
-        Ancestor a2 = new Ancestor(BASE_URL, 20, "Mid", s, List.of(), Version.empty());
-        Page page = new Page(BASE_URL, 30, "Leaf", s, List.of(a1, a2), Version.empty(),
+        Ancestor a1 = new Ancestor(BASE_URL, PageId.of(10), "Top", s, List.of(), Version.empty());
+        Ancestor a2 = new Ancestor(BASE_URL, PageId.of(20), "Mid", s, List.of(), Version.empty());
+        Page page = new Page(BASE_URL, PageId.of(30), "Leaf", s, List.of(a1, a2), Version.empty(),
                 "<p>body</p>", "", "", List.of(), List.of());
 
         String md = renderer(ExportConfig.defaults(), fetcher).render(page);
@@ -103,11 +105,11 @@ class PageRendererTest {
     @Test
     void breadcrumbs_disabled_when_setting_off() {
         Space s = space("K", "Space");
-        Ancestor a = new Ancestor(BASE_URL, 10, "Top", s, List.of(), Version.empty());
-        Page page = new Page(BASE_URL, 30, "Leaf", s, List.of(a), Version.empty(),
+        Ancestor a = new Ancestor(BASE_URL, PageId.of(10), "Top", s, List.of(), Version.empty());
+        Page page = new Page(BASE_URL, PageId.of(30), "Leaf", s, List.of(a), Version.empty(),
                 "<p>body</p>", "", "", List.of(), List.of());
         TestFetcher fetcher = new TestFetcher();
-        fetcher.pages.put(10L, new Page(BASE_URL, 10, "Top", s, List.of(), Version.empty(),
+        fetcher.pages.put(PageId.of(10L), new Page(BASE_URL, PageId.of(10), "Top", s, List.of(), Version.empty(),
                 "", "", "", List.of(), List.of()));
 
         ExportConfig noBreadcrumbs = withBreadcrumbs(false);
@@ -119,7 +121,7 @@ class PageRendererTest {
     @Test
     void placeholder_escaping_is_applied_after_conversion() {
         Space s = space("K", "Space");
-        Page p = new Page(BASE_URL, 1, "T", s, List.of(), Version.empty(),
+        Page p = new Page(BASE_URL, PageId.of(1), "T", s, List.of(), Version.empty(),
                 "<p>fill in &lt;your-name&gt;</p>", "", "", List.of(), List.of());
 
         String md = renderer(ExportConfig.defaults(), new TestFetcher()).render(p);

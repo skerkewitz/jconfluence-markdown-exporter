@@ -7,6 +7,7 @@ import de.skerkewitz.jcme.lockfile.LockfileManager;
 import de.skerkewitz.jcme.markdown.RenderingContext;
 import de.skerkewitz.jcme.model.ExportablePage;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,7 +92,7 @@ public final class ParallelExportRunner {
 
     private void runOne(ExportablePage page, ExportStats stats) {
         long started = System.currentTimeMillis();
-        long pageId = page.id();
+        PageId pageId = page.id();
         String pageTitle = page.title();
         try {
             LOG.debug("[{}] Worker starting page id={}", Thread.currentThread().getName(), pageId);
@@ -101,16 +102,16 @@ public final class ParallelExportRunner {
             RenderingContext rc = rcFactory.create(full);
             lockfile.recordPage(full, attachments, rc);
             stats.incExported();
-            long elapsed = System.currentTimeMillis() - started;
+            java.time.Duration elapsed = java.time.Duration.ofMillis(System.currentTimeMillis() - started);
             LOG.debug("[{}] Exported page id={} '{}' in {} ms",
-                    Thread.currentThread().getName(), full.id(), full.title(), elapsed);
+                    Thread.currentThread().getName(), full.id(), full.title(), elapsed.toMillis());
             progress.pageDone(doneCount.incrementAndGet(), total, pageId, pageTitle,
                     ProgressUi.Outcome.EXPORTED, elapsed);
         } catch (Exception e) {
             LOG.warn("Failed to export page {}: {}", pageId, e.toString(), e);
             stats.incFailed();
             progress.pageDone(doneCount.incrementAndGet(), total, pageId, pageTitle,
-                    ProgressUi.Outcome.FAILED, -1);
+                    ProgressUi.Outcome.FAILED, null);
         }
     }
 

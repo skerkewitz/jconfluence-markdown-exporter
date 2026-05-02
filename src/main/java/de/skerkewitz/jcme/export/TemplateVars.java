@@ -6,6 +6,7 @@ import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.Descendant;
 import de.skerkewitz.jcme.model.Document;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 
 import java.util.LinkedHashMap;
@@ -29,14 +30,14 @@ public final class TemplateVars {
 
     public Map<String, String> forPage(Page page, ConfluenceFetcher fetcher) {
         Map<String, String> vars = base(page, fetcher);
-        vars.put("page_id", String.valueOf(page.id()));
+        vars.put("page_id", page.id().toString());
         vars.put("page_title", sanitizer.sanitize(page.title()));
         return vars;
     }
 
     public Map<String, String> forDescendant(Descendant descendant, ConfluenceFetcher fetcher) {
         Map<String, String> vars = base(descendant, fetcher);
-        vars.put("page_id", String.valueOf(descendant.id()));
+        vars.put("page_id", descendant.id().toString());
         vars.put("page_title", sanitizer.sanitize(descendant.title()));
         return vars;
     }
@@ -54,14 +55,16 @@ public final class TemplateVars {
     private Map<String, String> base(Document doc, ConfluenceFetcher fetcher) {
         Space space = doc.space();
         Map<String, String> vars = new LinkedHashMap<>();
-        vars.put("space_key", sanitizer.sanitize(space == null ? "" : space.key()));
+        String spaceKeyStr = space == null || space.key() == null ? "" : space.key().value();
+        vars.put("space_key", sanitizer.sanitize(spaceKeyStr));
         vars.put("space_name", sanitizer.sanitize(space == null ? "" : space.name()));
         vars.put("homepage_id", "");
         vars.put("homepage_title", "");
         if (space != null && space.homepage() != null) {
-            vars.put("homepage_id", String.valueOf(space.homepage()));
+            PageId homepageId = PageId.of(space.homepage());
+            vars.put("homepage_id", homepageId.toString());
             try {
-                Page homepage = fetcher.getPage(space.homepage(), doc.baseUrl());
+                Page homepage = fetcher.getPage(homepageId, doc.baseUrl());
                 vars.put("homepage_title", sanitizer.sanitize(homepage.title()));
             } catch (Exception ignored) {
                 // Leave homepage_title blank on lookup failure.
@@ -69,7 +72,7 @@ public final class TemplateVars {
         }
         List<Ancestor> ancestors = doc.ancestors();
         vars.put("ancestor_ids",
-                ancestors.stream().map(a -> String.valueOf(a.id())).collect(Collectors.joining("/")));
+                ancestors.stream().map(a -> a.id().toString()).collect(Collectors.joining("/")));
         vars.put("ancestor_titles",
                 ancestors.stream().map(a -> sanitizer.sanitize(a.title())).collect(Collectors.joining("/")));
         return vars;

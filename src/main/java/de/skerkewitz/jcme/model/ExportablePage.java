@@ -7,5 +7,5 @@ package de.skerkewitz.jcme.model;
  */
 public sealed interface ExportablePage extends Document permits Page, Descendant {
 
-    long id();
+    PageId id();
 }

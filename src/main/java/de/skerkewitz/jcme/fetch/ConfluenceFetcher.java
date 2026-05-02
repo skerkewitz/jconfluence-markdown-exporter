@@ -2,6 +2,7 @@ package de.skerkewitz.jcme.fetch;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import de.skerkewitz.jcme.api.ApiClientFactory;
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.api.ConfluenceClient;
 import de.skerkewitz.jcme.api.ConfluenceRef;
 import de.skerkewitz.jcme.api.JiraClient;
@@ -14,12 +15,16 @@ import de.skerkewitz.jcme.model.Ancestor;
 import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.Descendant;
 import de.skerkewitz.jcme.model.JiraIssue;
+import de.skerkewitz.jcme.model.IssueKey;
 import de.skerkewitz.jcme.model.JsonHelpers;
 import de.skerkewitz.jcme.model.Label;
 import de.skerkewitz.jcme.model.Organization;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
+import de.skerkewitz.jcme.model.SpaceKey;
 import de.skerkewitz.jcme.model.User;
+import de.skerkewitz.jcme.model.UserIdentifier;
 import de.skerkewitz.jcme.model.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -52,13 +57,11 @@ public class ConfluenceFetcher {
     private final ApiClientFactory apiFactory;
     private final ConfigStore configStore;
 
-    private final ConcurrentHashMap<CacheKey<Long>, Page> pageCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, Space> spaceCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, Organization> orgCache = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, User> userByUsername = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, User> userByKey = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, User> userByAccountId = new ConcurrentHashMap<>();
-    private final ConcurrentHashMap<CacheKey<String>, JiraIssue> jiraIssues = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CacheKey<PageId>, Page> pageCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CacheKey<SpaceKey>, Space> spaceCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<BaseUrl, Organization> orgCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CacheKey<UserIdentifier>, User> userCache = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<CacheKey<IssueKey>, JiraIssue> jiraIssues = new ConcurrentHashMap<>();
 
     public ConfluenceFetcher(ApiClientFactory apiFactory, ConfigStore configStore) {
         this.apiFactory = apiFactory;
@@ -73,19 +76,19 @@ public class ConfluenceFetcher {
 
     public Page resolvePageFromUrl(String pageUrl) {
         LOG.info("Resolving page URL: {}", pageUrl);
-        String baseUrl = UrlParsing.extractBaseUrl(pageUrl);
+        BaseUrl baseUrl = BaseUrl.fromPageUrl(pageUrl);
         LOG.debug("Extracted base URL: {}", baseUrl);
         // Touch the client (creates/prompts on first connection)
         LOG.debug("Acquiring Confluence client for {}", baseUrl);
         apiFactory.getConfluence(baseUrl);
 
-        Optional<Long> queryId = UrlParsing.extractPageIdQueryParam(pageUrl);
+        Optional<PageId> queryId = UrlParsing.extractPageIdQueryParam(pageUrl);
         if (queryId.isPresent()) {
             LOG.debug("Found pageId query parameter: {}", queryId.get());
             return getPage(queryId.get(), baseUrl);
         }
 
-        String relative = UrlParsing.relativePath(pageUrl, baseUrl);
+        String relative = UrlParsing.relativePath(pageUrl, baseUrl.value());
         LOG.debug("Parsing Confluence path: {}", relative);
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath(relative);
         if (ref.isPresent()) {
@@ -97,10 +100,10 @@ public class ConfluenceFetcher {
             if (r.spaceKey() != null && r.pageTitle() != null) {
                 LOG.info("Looking up page '{}' in space '{}'", r.pageTitle(), r.spaceKey());
                 JsonNode page = apiFactory.getConfluence(baseUrl)
-                        .getPageByTitle(r.spaceKey(), r.pageTitle(), "version");
+                        .getPageByTitle(r.spaceKey().value(), r.pageTitle(), "version");
                 JsonNode first = first(page.path("results"));
                 if (first != null && !first.isMissingNode()) {
-                    long resolvedId = first.path("id").asLong();
+                    PageId resolvedId = PageId.of(first.path("id").asLong());
                     LOG.debug("Page lookup by title resolved id={}", resolvedId);
                     return getPage(resolvedId, baseUrl);
                 }
@@ -111,9 +114,9 @@ public class ConfluenceFetcher {
 
     public Space resolveSpaceFromUrl(String spaceUrl) {
         LOG.info("Resolving space URL: {}", spaceUrl);
-        String baseUrl = UrlParsing.extractBaseUrl(spaceUrl);
+        BaseUrl baseUrl = BaseUrl.fromPageUrl(spaceUrl);
         apiFactory.getConfluence(baseUrl);
-        String relative = UrlParsing.relativePath(spaceUrl, baseUrl);
+        String relative = UrlParsing.relativePath(spaceUrl, baseUrl.value());
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath(relative);
         if (ref.isPresent() && ref.get().spaceKey() != null) {
             LOG.debug("Resolved space key '{}' from URL path", ref.get().spaceKey());
@@ -122,30 +125,30 @@ public class ConfluenceFetcher {
         throw new IllegalArgumentException("Could not parse space URL " + spaceUrl);
     }
 
-    public Organization resolveOrganizationFromUrl(String baseUrl) {
+    public Organization resolveOrganizationFromUrl(BaseUrl baseUrl) {
         LOG.info("Resolving organization at base URL: {}", baseUrl);
-        return getOrganization(UrlParsing.normalizeInstanceUrl(baseUrl));
+        return getOrganization(baseUrl);
     }
 
     // -------------------- Cached fetches --------------------
 
-    public Space getSpace(String spaceKey, String baseUrl) {
-        Space cached = spaceCache.get(new CacheKey<>(baseUrl, spaceKey));
+    public Space getSpace(SpaceKey spaceKey, BaseUrl baseUrl) {
+        Space cached = spaceCache.get(new CacheKey<>(baseUrl.value(), spaceKey));
         if (cached != null) {
             LOG.debug("Space cache hit: key={}", spaceKey);
             return cached;
         }
-        return spaceCache.computeIfAbsent(new CacheKey<>(baseUrl, spaceKey), k -> {
+        return spaceCache.computeIfAbsent(new CacheKey<>(baseUrl.value(), spaceKey), k -> {
             LOG.debug("Fetching space '{}' from {}", spaceKey, baseUrl);
-            JsonNode data = apiFactory.getConfluence(baseUrl).getSpace(spaceKey, "homepage");
+            JsonNode data = apiFactory.getConfluence(baseUrl).getSpace(spaceKey.value(), "homepage");
             Space space = Space.fromJson(data, baseUrl);
             LOG.info("Loaded space '{}' (homepage id={})", space.name(), space.homepage());
             return space;
         });
     }
 
-    public Organization getOrganization(String baseUrl) {
-        return orgCache.computeIfAbsent(new CacheKey<>(baseUrl, baseUrl), k -> {
+    public Organization getOrganization(BaseUrl baseUrl) {
+        return orgCache.computeIfAbsent(baseUrl, k -> {
             LOG.info("Listing global spaces at {}", baseUrl);
             ConfluenceClient client = apiFactory.getConfluence(baseUrl);
             List<Space> spaces = new ArrayList<>();
@@ -169,16 +172,16 @@ public class ConfluenceFetcher {
         });
     }
 
-    public Page getPage(long pageId, String baseUrl) {
-        Page cached = pageCache.get(new CacheKey<>(baseUrl, pageId));
+    public Page getPage(PageId pageId, BaseUrl baseUrl) {
+        Page cached = pageCache.get(new CacheKey<>(baseUrl.value(), pageId));
         if (cached != null) {
             LOG.debug("Page cache hit: id={}", pageId);
             return cached;
         }
-        return pageCache.computeIfAbsent(new CacheKey<>(baseUrl, pageId), k -> fetchPage(pageId, baseUrl));
+        return pageCache.computeIfAbsent(new CacheKey<>(baseUrl.value(), pageId), k -> fetchPage(pageId, baseUrl));
     }
 
-    private Page fetchPage(long pageId, String baseUrl) {
+    private Page fetchPage(PageId pageId, BaseUrl baseUrl) {
         LOG.info("Fetching page id={} from {}", pageId, baseUrl);
         ConfluenceClient client = apiFactory.getConfluence(baseUrl);
         JsonNode data;
@@ -199,13 +202,14 @@ public class ConfluenceFetcher {
         if (data == null || !data.isObject()) {
             throw new ApiException(
                     "Unexpected non-object response for page id=" + pageId + " at " + baseUrl,
-                    -1, baseUrl);
+                    -1, baseUrl.value());
         }
 
         String title = JsonHelpers.text(data, "title");
         LOG.info("Got page id={} title='{}' — resolving space, ancestors, attachments", pageId, title);
 
-        Space space = getSpace(JsonHelpers.extractSpaceKey(data), baseUrl);
+        String pageSpaceKey = JsonHelpers.extractSpaceKey(data);
+        Space space = pageSpaceKey.isEmpty() ? Space.empty(baseUrl) : getSpace(SpaceKey.of(pageSpaceKey), baseUrl);
         List<Ancestor> ancestors = parseAncestors(data.path("ancestors"), baseUrl);
         LOG.debug("Page id={} has {} ancestor(s)", pageId, ancestors.size());
 
@@ -243,7 +247,7 @@ public class ConfluenceFetcher {
         try {
             LOG.debug("Searching CQL ancestor={} (limit {})", page.id(), DESCENDANT_PAGE_SIZE);
             JsonNode response = client.searchCql(
-                    "type=page AND ancestor=" + page.id(), DESCENDANT_EXPAND, DESCENDANT_PAGE_SIZE);
+                    "type=page AND ancestor=" + page.id().value(), DESCENDANT_EXPAND, DESCENDANT_PAGE_SIZE);
             collectDescendants(response, result, page.baseUrl());
             String next = JsonHelpers.text(response.path("_links"), "next");
             while (next != null && !next.isEmpty()) {
@@ -263,14 +267,14 @@ public class ConfluenceFetcher {
         return result;
     }
 
-    private void collectDescendants(JsonNode response, List<Descendant> result, String baseUrl) {
+    private void collectDescendants(JsonNode response, List<Descendant> result, BaseUrl baseUrl) {
         for (JsonNode item : response.path("results")) {
             String spaceKey = JsonHelpers.extractSpaceKey(item);
-            Space space = spaceKey.isEmpty() ? Space.empty(baseUrl) : getSpace(spaceKey, baseUrl);
+            Space space = spaceKey.isEmpty() ? Space.empty(baseUrl) : getSpace(SpaceKey.of(spaceKey), baseUrl);
             List<Ancestor> ancestors = parseAncestors(item.path("ancestors"), baseUrl);
             result.add(new Descendant(
                     baseUrl,
-                    item.path("id").asLong(),
+                    PageId.of(item.path("id").asLong()),
                     JsonHelpers.text(item, "title"),
                     space,
                     ancestors,
@@ -279,7 +283,7 @@ public class ConfluenceFetcher {
         }
     }
 
-    public List<Attachment> getAttachments(long pageId, String baseUrl) {
+    public List<Attachment> getAttachments(PageId pageId, BaseUrl baseUrl) {
         LOG.debug("Listing attachments for page id={}", pageId);
         ConfluenceClient client = apiFactory.getConfluence(baseUrl);
         List<Attachment> result = new ArrayList<>();
@@ -301,7 +305,7 @@ public class ConfluenceFetcher {
         return result;
     }
 
-    private Attachment parseAttachment(JsonNode item, String baseUrl) {
+    private Attachment parseAttachment(JsonNode item, BaseUrl baseUrl) {
         JsonNode container = item.path("container");
         List<Ancestor> containerAncestors = parseAncestors(container.path("ancestors"), baseUrl);
         // The Python code drops the first ancestor and appends the container itself,
@@ -314,7 +318,8 @@ public class ConfluenceFetcher {
             ancestors.add(parseAncestor(container, baseUrl));
         }
         JsonNode extensions = item.path("extensions");
-        Space space = getSpace(JsonHelpers.extractSpaceKey(item), baseUrl);
+        String attSpaceKey = JsonHelpers.extractSpaceKey(item);
+        Space space = attSpaceKey.isEmpty() ? Space.empty(baseUrl) : getSpace(SpaceKey.of(attSpaceKey), baseUrl);
         return new Attachment(
                 baseUrl,
                 JsonHelpers.text(item, "id"),
@@ -332,7 +337,7 @@ public class ConfluenceFetcher {
         );
     }
 
-    private List<Ancestor> parseAncestors(JsonNode node, String baseUrl) {
+    private List<Ancestor> parseAncestors(JsonNode node, BaseUrl baseUrl) {
         if (node == null || !node.isArray()) return List.of();
         List<Ancestor> out = new ArrayList<>();
         Iterator<JsonNode> it = node.elements();
@@ -342,17 +347,17 @@ public class ConfluenceFetcher {
         return out;
     }
 
-    private Ancestor parseAncestor(JsonNode node, String baseUrl) {
+    private Ancestor parseAncestor(JsonNode node, BaseUrl baseUrl) {
         Space space;
         String spaceKey = JsonHelpers.extractSpaceKey(node);
         if (!spaceKey.isEmpty()) {
-            space = getSpace(spaceKey, baseUrl);
+            space = getSpace(SpaceKey.of(spaceKey), baseUrl);
         } else {
             space = Space.empty(baseUrl);
         }
         return new Ancestor(
                 baseUrl,
-                node.path("id").asLong(),
+                PageId.of(node.path("id").asLong()),
                 JsonHelpers.text(node, "title"),
                 space,
                 List.of(),
@@ -362,23 +367,18 @@ public class ConfluenceFetcher {
 
     // -------------------- Users + Jira --------------------
 
-    public User getUserByUsername(String username, String baseUrl) {
-        return userByUsername.computeIfAbsent(new CacheKey<>(baseUrl, username), k -> {
-            JsonNode data = apiFactory.getConfluence(baseUrl).getUserByUsername(username);
-            return User.fromJson(data);
-        });
-    }
-
-    public User getUserByUserkey(String userkey, String baseUrl) {
-        return userByKey.computeIfAbsent(new CacheKey<>(baseUrl, userkey), k -> {
-            JsonNode data = apiFactory.getConfluence(baseUrl).getUserByUserkey(userkey);
-            return User.fromJson(data);
-        });
-    }
-
-    public User getUserByAccountId(String accountId, String baseUrl) {
-        return userByAccountId.computeIfAbsent(new CacheKey<>(baseUrl, accountId), k -> {
-            JsonNode data = apiFactory.getConfluence(baseUrl).getUserByAccountId(accountId);
+    /**
+     * Look up a user by any supported identifier kind (account id, username, user key).
+     * Each kind hits a different REST endpoint; results share one cache.
+     */
+    public User getUser(UserIdentifier id, BaseUrl baseUrl) {
+        return userCache.computeIfAbsent(new CacheKey<>(baseUrl.value(), id), k -> {
+            ConfluenceClient client = apiFactory.getConfluence(baseUrl);
+            JsonNode data = switch (id) {
+                case UserIdentifier.AccountId a -> client.getUserByAccountId(a.value());
+                case UserIdentifier.Username u  -> client.getUserByUsername(u.value());
+                case UserIdentifier.UserKey k2  -> client.getUserByUserkey(k2.value());
+            };
             return User.fromJson(data);
         });
     }
@@ -387,10 +387,10 @@ public class ConfluenceFetcher {
      * Fetch a Jira issue by key. Returns empty when Jira enrichment is disabled
      * or when the API returns an auth failure.
      */
-    public Optional<JiraIssue> getJiraIssue(String issueKey, String jiraUrl) {
+    public Optional<JiraIssue> getJiraIssue(IssueKey issueKey, BaseUrl jiraUrl) {
         AppConfig settings = configStore.loadEffective();
         if (!settings.export().enableJiraEnrichment()) return Optional.empty();
-        CacheKey<String> key = new CacheKey<>(jiraUrl, issueKey);
+        CacheKey<IssueKey> key = new CacheKey<>(jiraUrl.value(), issueKey);
         JiraIssue cached = jiraIssues.get(key);
         if (cached != null) return Optional.of(cached);
         try {
@@ -409,7 +409,7 @@ public class ConfluenceFetcher {
 
     /** Mostly used in tests / for hot paths that want to seed the cache. */
     public void cachePage(Page page) {
-        pageCache.put(new CacheKey<>(page.baseUrl(), page.id()), page);
+        pageCache.put(new CacheKey<>(page.baseUrl().value(), page.id()), page);
     }
 
     private static JsonNode first(JsonNode array) {

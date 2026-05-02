@@ -1,11 +1,13 @@
 package de.skerkewitz.jcme.cli.progress;
 
 import de.skerkewitz.jcme.export.ExportStats;
+import de.skerkewitz.jcme.model.PageId;
 
 import java.io.OutputStream;
 import java.io.PrintStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.Locale;
 
 /**
@@ -87,20 +89,20 @@ public final class ProgressUi {
     }
 
     /** Print a single per-page progress line with a running counter and outcome glyph. */
-    public synchronized void pageDone(int done, int total, long pageId, String title, Outcome outcome, long elapsedMs) {
+    public synchronized void pageDone(int done, int total, PageId pageId, String title, Outcome outcome, Duration elapsed) {
         clearStatusInternal();
         String glyph = switch (outcome) {
             case EXPORTED -> green(ansi ? "✓" : "[ok]");
             case SKIPPED -> dim(ansi ? "·" : "[skip]");
             case FAILED -> red(ansi ? "✗" : "[fail]");
         };
-        String time = elapsedMs >= 0 ? dim(" " + formatMs(elapsedMs)) : "";
-        out.printf(Locale.ROOT, "  %s [%d/%d] %s (id=%d)%s%n", glyph, done, total, ellipsize(title, 60), pageId, time);
+        String time = elapsed != null ? dim(" " + formatDuration(elapsed)) : "";
+        out.printf(Locale.ROOT, "  %s [%d/%d] %s (id=%d)%s%n", glyph, done, total, ellipsize(title, 60), pageId.value(), time);
         out.flush();
     }
 
     /** Print the final summary panel. */
-    public synchronized void summary(ExportStats stats, Path outputRoot, long elapsedMs) {
+    public synchronized void summary(ExportStats stats, Path outputRoot, Duration elapsed) {
         clearStatusInternal();
         long pageTotal = stats.exported() + stats.skipped() + stats.failed();
         if (pageTotal == 0 && stats.removed() == 0
@@ -127,7 +129,7 @@ public final class ProgressUi {
             if (stats.attachmentsFailed() > 0)  appendRow(body, "  Failed",  String.valueOf(stats.attachmentsFailed()), RED);
         }
         appendRow(body, "Output",  outputRoot.toAbsolutePath().toString(), CYAN);
-        if (elapsedMs >= 0) appendRow(body, "Elapsed", formatMs(elapsedMs), DIM);
+        if (elapsed != null) appendRow(body, "Elapsed", formatDuration(elapsed), DIM);
 
         renderPanel(title, body.toString());
     }
@@ -221,7 +223,8 @@ public final class ProgressUi {
         return " ".repeat(left) + s + " ".repeat(right);
     }
 
-    static String formatMs(long ms) {
+    static String formatDuration(Duration d) {
+        long ms = d.toMillis();
         if (ms < 1000) return ms + " ms";
         double s = ms / 1000.0;
         // Locale.ROOT pins the decimal separator to '.' so the output is identical

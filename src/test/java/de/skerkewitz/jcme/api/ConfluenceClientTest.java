@@ -34,7 +34,7 @@ class ConfluenceClientTest {
         server.onGet("/rest/api/content/42", 200,
                 "{\"id\":\"42\",\"title\":\"Hello\"}", Map.of());
 
-        JsonNode page = client.getPageById(42, "body.view,version");
+        JsonNode page = client.getPageById(de.skerkewitz.jcme.model.PageId.of(42), "body.view,version");
 
         assertThat(page.get("id").asText()).isEqualTo("42");
         TestHttpServer.RecordedRequest req = server.requests("/rest/api/content/42").get(0);
@@ -46,7 +46,7 @@ class ConfluenceClientTest {
         server.onGet("/rest/api/content/7/child/attachment", 200,
                 "{\"results\":[],\"size\":0,\"start\":0,\"limit\":50}", Map.of());
 
-        client.getAttachmentsFromContent(7, 50, 50, "container.ancestors,version");
+        client.getAttachmentsFromContent(de.skerkewitz.jcme.model.PageId.of(7), 50, 50, "container.ancestors,version");
 
         TestHttpServer.RecordedRequest req = server.requests("/rest/api/content/7/child/attachment").get(0);
         assertThat(req.query()).contains("start=50");

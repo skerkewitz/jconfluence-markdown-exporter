@@ -49,7 +49,7 @@ class UmlautRoundTripTest {
         instances.put(server.baseUrl(), new ApiDetails("alice", "tok", "", ""));
 
         ExportConfig export = new ExportConfig(
-                "INFO", output.toString(),
+                de.skerkewitz.jcme.config.LogLevel.INFO, output.toString(),
                 "relative", "{space_name}/{page_title}.md",
                 "relative", "{space_name}/attachments/{attachment_file_id}{attachment_extension}",
                 false, true, true,

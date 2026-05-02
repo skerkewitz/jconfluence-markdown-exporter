@@ -1,10 +1,12 @@
 package de.skerkewitz.jcme.model;
 
+import de.skerkewitz.jcme.api.BaseUrl;
+
 import java.util.List;
 
 public record Descendant(
-        String baseUrl,
-        long id,
+        BaseUrl baseUrl,
+        PageId id,
         String title,
         Space space,
         List<Ancestor> ancestors,

@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.markdown;
 
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.config.ExportConfig;
 import de.skerkewitz.jcme.export.FilenameSanitizer;
 import de.skerkewitz.jcme.export.TemplateVars;
@@ -9,6 +10,7 @@ import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.JiraIssue;
 import de.skerkewitz.jcme.model.Label;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 import de.skerkewitz.jcme.model.User;
 import de.skerkewitz.jcme.model.Version;
@@ -23,29 +25,30 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class ConfluencePageConverterTest {
 
-    private static final String BASE_URL = "https://x.atlassian.net";
+    private static final BaseUrl BASE_URL = BaseUrl.of("https://x.atlassian.net");
 
     private static class TestFetcher extends ConfluenceFetcher {
-        final Map<Long, Page> pages = new HashMap<>();
+        final Map<PageId, Page> pages = new HashMap<>();
         final Map<String, User> users = new HashMap<>();
         final Map<String, JiraIssue> jiraIssues = new HashMap<>();
 
         TestFetcher() { super(null, null); }
 
-        @Override public Page getPage(long pageId, String baseUrl) {
+        @Override public Page getPage(PageId pageId, BaseUrl baseUrl) {
             Page p = pages.get(pageId);
             return p != null ? p : Page.inaccessible(pageId, baseUrl);
         }
 
-        @Override public User getUserByAccountId(String accountId, String baseUrl) {
-            User u = users.get(accountId);
+        @Override public User getUser(de.skerkewitz.jcme.model.UserIdentifier id, BaseUrl baseUrl) {
+            String key = id.value();
+            User u = users.get(key);
             if (u == null) throw new de.skerkewitz.jcme.api.exceptions.ApiException(
-                    "User not found", 404, baseUrl);
+                    "User not found", 404, baseUrl.value());
             return u;
         }
 
-        @Override public Optional<JiraIssue> getJiraIssue(String issueKey, String jiraUrl) {
-            return Optional.ofNullable(jiraIssues.get(issueKey));
+        @Override public Optional<JiraIssue> getJiraIssue(de.skerkewitz.jcme.model.IssueKey issueKey, BaseUrl jiraUrl) {
+            return Optional.ofNullable(jiraIssues.get(issueKey.value()));
         }
     }
 
@@ -59,11 +62,11 @@ class ConfluencePageConverterTest {
     }
 
     private static Space space(String key, String name, Long homepage) {
-        return new Space(BASE_URL, key, name, "", homepage);
+        return new Space(BASE_URL, de.skerkewitz.jcme.model.SpaceKey.of(key), name, "", homepage);
     }
 
     private static Page makePage(long id, String title, String body, Space space) {
-        return new Page(BASE_URL, id, title, space, List.of(), Version.empty(),
+        return new Page(BASE_URL, PageId.of(id), title, space, List.of(), Version.empty(),
                 body, "", "", List.of(), List.of());
     }
 
@@ -184,7 +187,7 @@ class ConfluencePageConverterTest {
         Page parent = makePage(100, "Parent", "", s);
         Page target = makePage(200, "Other", "", s);
         TestFetcher fetcher = new TestFetcher();
-        fetcher.pages.put(200L, target);
+        fetcher.pages.put(PageId.of(200L), target);
 
         ExportConfig wiki = withPageHref("wiki");
         ConfluencePageConverter c = new ConfluencePageConverter(rc(parent, fetcher, wiki));
@@ -208,7 +211,7 @@ class ConfluencePageConverterTest {
         Space s = space("K", "K", null);
         Attachment a = new Attachment(BASE_URL, "att1", "diag.png", s, List.of(),
                 Version.empty(), 0, "image/png", "", "guid-1", "", "/dl", "");
-        Page p = new Page(BASE_URL, 1, "P", s, List.of(), Version.empty(),
+        Page p = new Page(BASE_URL, PageId.of(1), "P", s, List.of(), Version.empty(),
                 "", "", "", List.of(), List.of(a));
 
         String md = convert(p, "<img data-media-id=\"guid-1\" alt=\"diagram\" src=\"x.png\">");
@@ -306,7 +309,7 @@ class ConfluencePageConverterTest {
         Space s = space("K", "K", null);
         Page p = makePage(1, "P", "", s);
         TestFetcher fetcher = new TestFetcher();
-        fetcher.jiraIssues.put("PROJ-1", new JiraIssue("PROJ-1", "Fix bug", "", "Open"));
+        fetcher.jiraIssues.put("PROJ-1", new JiraIssue(de.skerkewitz.jcme.model.IssueKey.of("PROJ-1"), "Fix bug", "", "Open"));
 
         String md = convert(p,
                 "<span data-macro-name=\"jira\" data-jira-key=\"PROJ-1\">"
@@ -405,7 +408,7 @@ class ConfluencePageConverterTest {
 
     @SuppressWarnings("unused")
     private static Ancestor ancestor(long id, String title) {
-        return new Ancestor(BASE_URL, id, title, Space.empty(BASE_URL), List.of(), Version.empty());
+        return new Ancestor(BASE_URL, PageId.of(id), title, Space.empty(BASE_URL), List.of(), Version.empty());
     }
 
     @SuppressWarnings("unused")

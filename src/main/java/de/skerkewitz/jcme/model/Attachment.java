@@ -1,9 +1,11 @@
 package de.skerkewitz.jcme.model;
 
+import de.skerkewitz.jcme.api.BaseUrl;
+
 import java.util.List;
 
 public record Attachment(
-        String baseUrl,
+        BaseUrl baseUrl,
         String id,
         String title,
         Space space,

@@ -42,7 +42,7 @@ class ExportServiceIntegrationTest {
         instances.put(server.baseUrl(), new ApiDetails("alice", "tok", "", ""));
 
         ExportConfig export = new ExportConfig(
-                "INFO",
+                de.skerkewitz.jcme.config.LogLevel.INFO,
                 output.toString(),
                 "relative",
                 "{space_name}/{page_title}.md",

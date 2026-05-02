@@ -40,7 +40,7 @@ public class BugReportCommand implements Runnable {
         System.out.println(out);
     }
 
-    private static void redact(ObjectNode root) {
+    static void redact(ObjectNode root) {
         JsonNode auth = root.get("auth");
         if (auth instanceof ObjectNode authObj) {
             for (String service : new String[]{"confluence", "jira"}) {

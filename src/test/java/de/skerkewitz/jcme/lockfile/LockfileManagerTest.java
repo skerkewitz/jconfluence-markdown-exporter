@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.lockfile;
 
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.config.ExportConfig;
 import de.skerkewitz.jcme.export.ExportStats;
 import de.skerkewitz.jcme.export.FilenameSanitizer;
@@ -7,6 +8,7 @@ import de.skerkewitz.jcme.export.TemplateVars;
 import de.skerkewitz.jcme.fetch.ConfluenceFetcher;
 import de.skerkewitz.jcme.markdown.RenderingContext;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 import de.skerkewitz.jcme.model.User;
 import de.skerkewitz.jcme.model.Version;
@@ -25,18 +27,18 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 class LockfileManagerTest {
 
-    private static final String BASE = "https://x.atlassian.net";
+    private static final BaseUrl BASE = BaseUrl.of("https://x.atlassian.net");
 
     private static class StubFetcher extends ConfluenceFetcher {
         StubFetcher() { super(null, null); }
-        Map<Long, Page> pages = new HashMap<>();
-        @Override public Page getPage(long pageId, String baseUrl) {
+        Map<PageId, Page> pages = new HashMap<>();
+        @Override public Page getPage(PageId pageId, BaseUrl baseUrl) {
             return pages.getOrDefault(pageId, Page.inaccessible(pageId, baseUrl));
         }
     }
 
     private static Page page(long id, int version, String title, Space space) {
-        return new Page(BASE, id, title, space, List.of(),
+        return new Page(BASE, PageId.of(id), title, space, List.of(),
                 new Version(version, User.empty(), "", ""),
                 "<p>x</p>", "", "", List.of(), List.of());
     }
@@ -51,10 +53,10 @@ class LockfileManagerTest {
     void disabled_manager_short_circuits_all_operations(@TempDir Path tmp) {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", false);
 
-        assertThat(mgr.shouldExport(page(1, 1, "T", new Space(BASE, "K", "K", "", null)),
+        assertThat(mgr.shouldExport(page(1, 1, "T", new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "K", "", null)),
                 tmp.resolve("anything"))).isTrue();
         assertThat(mgr.unseenIds()).isEmpty();
-        assertThat(mgr.attachmentEntriesForPage("1")).isEmpty();
+        assertThat(mgr.attachmentEntriesForPage(PageId.of(1))).isEmpty();
         // Should not write any file
         assertThat(tmp.toFile().list()).isEmpty();
     }
@@ -62,7 +64,7 @@ class LockfileManagerTest {
     @Test
     void record_page_persists_lockfile_entry(@TempDir Path tmp) throws Exception {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Page p = page(1, 5, "Hello", new Space(BASE, "K", "Space", "", null));
+        Page p = page(1, 5, "Hello", new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null));
 
         mgr.recordPage(p, new LinkedHashMap<>(), rc(p, tmp));
 
@@ -77,7 +79,7 @@ class LockfileManagerTest {
     @Test
     void should_export_returns_true_for_unknown_page(@TempDir Path tmp) {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page p = page(99, 1, "New", space);
 
         assertThat(mgr.shouldExport(p, tmp.resolve("Space/New.md"))).isTrue();
@@ -86,7 +88,7 @@ class LockfileManagerTest {
     @Test
     void should_export_returns_false_for_unchanged_page(@TempDir Path tmp) throws Exception {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page p = page(1, 5, "Hello", space);
         // First export: record
         Path mdPath = tmp.resolve(rc(p, tmp).pageExportPath(p));
@@ -102,7 +104,7 @@ class LockfileManagerTest {
     @Test
     void should_export_returns_true_when_version_bumped(@TempDir Path tmp) throws Exception {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page v1 = page(1, 1, "Hello", space);
         Files.createDirectories(tmp.resolve(rc(v1, tmp).pageExportPath(v1)).getParent());
         Files.writeString(tmp.resolve(rc(v1, tmp).pageExportPath(v1)), "x");
@@ -116,7 +118,7 @@ class LockfileManagerTest {
     @Test
     void should_export_returns_true_when_local_file_missing(@TempDir Path tmp) {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page p = page(1, 1, "Hello", space);
         // Record, but don't create the local file
         mgr.recordPage(p, new LinkedHashMap<>(), rc(p, tmp));
@@ -128,22 +130,22 @@ class LockfileManagerTest {
     @Test
     void unseen_ids_returns_pages_not_marked_seen_this_run(@TempDir Path tmp) {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page p1 = page(1, 1, "P1", space);
         Page p2 = page(2, 1, "P2", space);
         mgr.recordPage(p1, new LinkedHashMap<>(), rc(p1, tmp));
         mgr.recordPage(p2, new LinkedHashMap<>(), rc(p2, tmp));
 
         LockfileManager reloaded = new LockfileManager(tmp, "lock.json", true);
-        reloaded.markSeenIds(List.of(1L)); // only p1 seen
+        reloaded.markSeenIds(List.of(PageId.of(1L))); // only p1 seen
 
-        assertThat(reloaded.unseenIds()).containsExactlyInAnyOrder("2");
+        assertThat(reloaded.unseenIds()).containsExactlyInAnyOrder(PageId.of(2L));
     }
 
     @Test
     void remove_pages_deletes_local_files_and_lockfile_entries(@TempDir Path tmp) throws Exception {
         LockfileManager mgr = new LockfileManager(tmp, "lock.json", true);
-        Space space = new Space(BASE, "K", "Space", "", null);
+        Space space = new Space(BASE, de.skerkewitz.jcme.model.SpaceKey.of("K"), "Space", "", null);
         Page p = page(1, 1, "Doomed", space);
         Path mdPath = tmp.resolve(rc(p, tmp).pageExportPath(p));
         Files.createDirectories(mdPath.getParent());
@@ -152,7 +154,7 @@ class LockfileManagerTest {
 
         LockfileManager reloaded = new LockfileManager(tmp, "lock.json", true);
         ExportStats stats = new ExportStats();
-        reloaded.removePages(Set.of("1"), stats);
+        reloaded.removePages(Set.of(PageId.of(1L)), stats);
 
         assertThat(Files.exists(mdPath)).isFalse();
         assertThat(stats.removed()).isEqualTo(1);

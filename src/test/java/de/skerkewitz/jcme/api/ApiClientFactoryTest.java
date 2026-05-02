@@ -40,7 +40,7 @@ class ApiClientFactoryTest {
         store.save(AppConfig.defaults());
         ApiClientFactory factory = new ApiClientFactory(store);
 
-        assertThatThrownBy(() -> factory.getConfluence("https://nope.atlassian.net"))
+        assertThatThrownBy(() -> factory.getConfluence(BaseUrl.of("https://nope.atlassian.net")))
                 .isInstanceOf(AuthNotConfiguredException.class)
                 .hasMessageContaining("Confluence");
     }
@@ -52,8 +52,8 @@ class ApiClientFactoryTest {
         server.onGet("/rest/api/space", 200, "{\"results\":[],\"size\":0}", Map.of());
         ApiClientFactory factory = new ApiClientFactory(store);
 
-        ConfluenceClient c1 = factory.getConfluence(server.baseUrl());
-        ConfluenceClient c2 = factory.getConfluence(server.baseUrl() + "/");
+        ConfluenceClient c1 = factory.getConfluence(BaseUrl.of(server.baseUrl()));
+        ConfluenceClient c2 = factory.getConfluence(BaseUrl.of(server.baseUrl() + "/"));
 
         assertThat(c1).isSameAs(c2);
         assertThat(server.hits("/rest/api/space")).isEqualTo(1);
@@ -65,9 +65,9 @@ class ApiClientFactoryTest {
         server.onGet("/rest/api/space", 200, "{\"results\":[]}", Map.of());
         ApiClientFactory factory = new ApiClientFactory(store);
 
-        ConfluenceClient c1 = factory.getConfluence(server.baseUrl());
-        factory.invalidateConfluence(server.baseUrl());
-        ConfluenceClient c2 = factory.getConfluence(server.baseUrl());
+        ConfluenceClient c1 = factory.getConfluence(BaseUrl.of(server.baseUrl()));
+        factory.invalidateConfluence(BaseUrl.of(server.baseUrl()));
+        ConfluenceClient c2 = factory.getConfluence(BaseUrl.of(server.baseUrl()));
 
         assertThat(c1).isNotSameAs(c2);
         assertThat(server.hits("/rest/api/space")).isEqualTo(2);
@@ -79,7 +79,7 @@ class ApiClientFactoryTest {
         server.onGet("/rest/api/space", 401, "unauthorized", Map.of());
         ApiClientFactory factory = new ApiClientFactory(store);
 
-        assertThatThrownBy(() -> factory.getConfluence(server.baseUrl()))
+        assertThatThrownBy(() -> factory.getConfluence(BaseUrl.of(server.baseUrl())))
                 .isInstanceOf(AuthNotConfiguredException.class);
     }
 
@@ -125,7 +125,7 @@ class ApiClientFactoryTest {
             apiHost.onGet("/rest/api/space", 200, "{\"results\":[]}", Map.of());
 
             ApiClientFactory factory = new ApiClientFactory(store);
-            ConfluenceClient client = factory.getConfluence(pageHost.baseUrl());
+            ConfluenceClient client = factory.getConfluence(BaseUrl.of(pageHost.baseUrl()));
 
             assertThat(client.baseUrl()).isEqualTo(apiHost.baseUrl());
             assertThat(apiHost.hits("/rest/api/space")).isEqualTo(1);
@@ -158,7 +158,7 @@ class ApiClientFactoryTest {
 
             ApiClientFactory factory = new ApiClientFactory(store);
             long started = System.currentTimeMillis();
-            factory.getConfluence(fakePageHost);
+            factory.getConfluence(BaseUrl.of(fakePageHost));
             long elapsed = System.currentTimeMillis() - started;
 
             // Should be much faster than the 5-second cloud-id probe timeout.

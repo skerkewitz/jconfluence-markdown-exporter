@@ -1,5 +1,7 @@
 package de.skerkewitz.jcme.model;
 
+import de.skerkewitz.jcme.api.BaseUrl;
+
 import java.util.List;
 
 /**
@@ -7,7 +9,7 @@ import java.util.List;
  * attachment). Mirrors the Python {@code Document} pydantic base class.
  */
 public interface Document {
-    String baseUrl();
+    BaseUrl baseUrl();
     String title();
     Space space();
     List<Ancestor> ancestors();

@@ -395,6 +395,18 @@ ENV vars override file values for the duration of the run; they are not persiste
 - `rich`-styled console output is replaced with plain text. CI mode (`NO_COLOR` /
   `CI=true`) doesn't yet have a special branch; output is plain text either way.
 
+## Internals documentation
+
+For contributors who want to understand or modify how `jcme` works, the
+[doc/](doc/) folder has dedicated guides for each major subsystem:
+
+- [doc/architecture.md](doc/architecture.md) — component map and data flow
+- [doc/connector.md](doc/connector.md) — REST client, auth, URL parsing
+- [doc/crawling.md](doc/crawling.md) — how each export mode discovers pages
+- [doc/conversion.md](doc/conversion.md) — full HTML → Markdown reference
+- [doc/lockfile.md](doc/lockfile.md) — skip-unchanged + stale-cleanup mechanics
+- [doc/limitations.md](doc/limitations.md) — known gaps + improvement ideas
+
 ## Project layout
 
 ```

@@ -6,6 +6,7 @@ import de.skerkewitz.jcme.api.exceptions.ApiException;
 import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.JiraIssue;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.User;
 import de.skerkewitz.jcme.utils.DrawioMermaid;
 import org.jsoup.Jsoup;
@@ -127,7 +128,8 @@ public class ConfluencePageConverter extends MarkdownConverter {
         if ("page".equalsIgnoreCase(el.attr("data-linked-resource-type"))) {
             String pid = el.attr("data-linked-resource-id");
             if (!pid.isEmpty() && !"null".equals(pid)) {
-                return convertPageLink(parseLong(pid));
+                PageId parsed = parsePageId(pid);
+                if (parsed != null) return convertPageLink(parsed);
             }
         }
         if ("attachment".equalsIgnoreCase(el.attr("data-linked-resource-type"))) {
@@ -158,7 +160,7 @@ public class ConfluencePageConverter extends MarkdownConverter {
         return "[" + visible + "](" + href + ")";
     }
 
-    private String convertPageLink(long pageId) {
+    private String convertPageLink(PageId pageId) {
         Page target;
         try {
             target = ctx.fetcher().getPage(pageId, ctx.page().baseUrl());
@@ -426,17 +428,22 @@ public class ConfluencePageConverter extends MarkdownConverter {
     }
 
     private String convertJiraIssue(Element el, String text) {
-        String issueKey = el.attr("data-jira-key");
+        String rawKey = el.attr("data-jira-key");
         Element link = el.selectFirst("a.jira-issue-key");
         if (link == null) return text;
         String href = link.attr("href");
-        if (issueKey.isEmpty()) {
+        Optional<de.skerkewitz.jcme.model.IssueKey> issueKeyOpt =
+                de.skerkewitz.jcme.model.IssueKey.tryParse(rawKey);
+        if (issueKeyOpt.isEmpty()) {
             return processChildren(link, Set.of());
         }
+        de.skerkewitz.jcme.model.IssueKey issueKey = issueKeyOpt.get();
         try {
             String jiraBase = UrlParsing.extractJiraBaseUrl(href);
-            if (jiraBase == null) jiraBase = ctx.page().baseUrl();
-            Optional<JiraIssue> issue = ctx.fetcher().getJiraIssue(issueKey, jiraBase);
+            de.skerkewitz.jcme.api.BaseUrl jiraBaseUrl = jiraBase == null
+                    ? ctx.page().baseUrl()
+                    : de.skerkewitz.jcme.api.BaseUrl.of(jiraBase);
+            Optional<JiraIssue> issue = ctx.fetcher().getJiraIssue(issueKey, jiraBaseUrl);
             if (issue.isEmpty()) return "[[" + issueKey + "](" + href + ")";
             return "[[" + issue.get().key() + "] " + issue.get().summary() + "](" + href + ")";
         } catch (ApiException e) {
@@ -500,7 +507,9 @@ public class ConfluencePageConverter extends MarkdownConverter {
         String aid = el.attr("data-account-id");
         if (!aid.isEmpty()) {
             try {
-                User u = ctx.fetcher().getUserByAccountId(aid, ctx.page().baseUrl());
+                User u = ctx.fetcher().getUser(
+                        new de.skerkewitz.jcme.model.UserIdentifier.AccountId(aid),
+                        ctx.page().baseUrl());
                 return displayUser(u);
             } catch (ApiException e) {
                 LOG.warn("User {} not found. Using text instead.", aid);
@@ -641,8 +650,8 @@ public class ConfluencePageConverter extends MarkdownConverter {
         return s.endsWith("\n") ? s.substring(0, s.length() - 1) : s;
     }
 
-    private static long parseLong(String s) {
-        try { return Long.parseLong(s); } catch (NumberFormatException e) { return 0; }
+    private static PageId parsePageId(String s) {
+        try { return PageId.parse(s); } catch (IllegalArgumentException e) { return null; }
     }
 
     private static String decode(String s) {

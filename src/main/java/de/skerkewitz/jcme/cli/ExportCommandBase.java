@@ -38,7 +38,7 @@ public abstract class ExportCommandBase implements Callable<Integer> {
         long started = System.currentTimeMillis();
         try {
             ExportStats stats = exportFunction().apply(service, urls());
-            progress.summary(stats, resolveOutputRoot(store), System.currentTimeMillis() - started);
+            progress.summary(stats, resolveOutputRoot(store), java.time.Duration.ofMillis(System.currentTimeMillis() - started));
             return stats.failed() > 0 ? 1 : 0;
         } catch (AuthNotConfiguredException e) {
             System.err.println(e.getMessage());

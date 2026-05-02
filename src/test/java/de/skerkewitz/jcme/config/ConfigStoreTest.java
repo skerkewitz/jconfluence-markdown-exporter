@@ -44,7 +44,7 @@ class ConfigStoreTest {
 
         store.setByPath("export.log_level", "DEBUG");
 
-        assertThat(store.load().export().logLevel()).isEqualTo("DEBUG");
+        assertThat(store.load().export().logLevel()).isEqualTo(de.skerkewitz.jcme.config.LogLevel.DEBUG);
         assertThat(store.getByPath("export.log_level").asText()).isEqualTo("DEBUG");
     }
 
@@ -92,7 +92,7 @@ class ConfigStoreTest {
 
         AppConfig loaded = store.loadEffective();
 
-        assertThat(loaded.export().logLevel()).isEqualTo("DEBUG");
+        assertThat(loaded.export().logLevel()).isEqualTo(de.skerkewitz.jcme.config.LogLevel.DEBUG);
         assertThat(loaded.connectionConfig().maxWorkers()).isEqualTo(5);
         assertThat(loaded.connectionConfig().verifySsl()).isFalse();
     }
@@ -107,7 +107,7 @@ class ConfigStoreTest {
 
         // load() (no env overlay) sees the default
         ConfigStore plain = new ConfigStore(cfg, Map.of());
-        assertThat(plain.load().export().logLevel()).isEqualTo("INFO");
+        assertThat(plain.load().export().logLevel()).isEqualTo(de.skerkewitz.jcme.config.LogLevel.INFO);
     }
 
     @Test

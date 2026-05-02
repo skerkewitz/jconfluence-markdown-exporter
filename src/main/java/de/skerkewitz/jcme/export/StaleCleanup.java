@@ -2,9 +2,11 @@ package de.skerkewitz.jcme.export;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import de.skerkewitz.jcme.api.ApiClientFactory;
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.api.ConfluenceClient;
 import de.skerkewitz.jcme.config.AppConfig;
 import de.skerkewitz.jcme.lockfile.LockfileManager;
+import de.skerkewitz.jcme.model.PageId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -12,6 +14,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 /**
  * Identify pages that disappeared from Confluence between exports and trigger their cleanup.
@@ -34,7 +37,7 @@ public final class StaleCleanup {
         this.config = config;
     }
 
-    public Set<String> fetchDeletedPageIds(List<String> pageIds, String baseUrl) {
+    public Set<PageId> fetchDeletedPageIds(List<PageId> pageIds, BaseUrl baseUrl) {
         if (pageIds.isEmpty()) return Set.of();
         boolean useV2 = config.connectionConfig().useV2Api();
         int configuredBatch = config.export().existenceCheckBatchSize();
@@ -46,7 +49,8 @@ public final class StaleCleanup {
         Set<String> existing = new HashSet<>();
         ConfluenceClient client = apiFactory.getConfluence(baseUrl);
         for (int i = 0; i < pageIds.size(); i += batchSize) {
-            List<String> batch = pageIds.subList(i, Math.min(i + batchSize, pageIds.size()));
+            List<String> batch = pageIds.subList(i, Math.min(i + batchSize, pageIds.size()))
+                    .stream().map(PageId::toString).collect(Collectors.toList());
             try {
                 if (useV2) existing.addAll(fetchV2(client, batch));
                 else existing.addAll(fetchCql(client, batch));
@@ -57,24 +61,24 @@ public final class StaleCleanup {
             }
         }
 
-        Set<String> deleted = new HashSet<>(pageIds);
-        deleted.removeAll(existing);
+        Set<PageId> deleted = new HashSet<>(pageIds);
+        deleted.removeIf(id -> existing.contains(id.toString()));
         return deleted;
     }
 
-    public void run(LockfileManager lockfile, String baseUrl) {
+    public void run(LockfileManager lockfile, BaseUrl baseUrl) {
         if (!config.export().cleanupStale()) {
             LOG.debug("Stale page cleanup disabled — skipping.");
             return;
         }
-        Set<String> unseen = lockfile.unseenIds();
+        Set<PageId> unseen = lockfile.unseenIds();
         if (unseen.isEmpty()) {
             LOG.debug("No unseen pages in lockfile — nothing to clean up.");
             return;
         }
-        List<String> sorted = new ArrayList<>(unseen);
-        sorted.sort(String::compareTo);
-        Set<String> deleted = fetchDeletedPageIds(sorted, baseUrl);
+        List<PageId> sorted = new ArrayList<>(unseen);
+        sorted.sort((a, b) -> a.toString().compareTo(b.toString()));
+        Set<PageId> deleted = fetchDeletedPageIds(sorted, baseUrl);
         if (!deleted.isEmpty()) {
             LOG.info("Removing {} stale page(s) from local export.", deleted.size());
         }

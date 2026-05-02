@@ -1,6 +1,7 @@
 package de.skerkewitz.jcme.fetch;
 
 import de.skerkewitz.jcme.api.ApiClientFactory;
+import de.skerkewitz.jcme.api.BaseUrl;
 import de.skerkewitz.jcme.api.TestHttpServer;
 import de.skerkewitz.jcme.config.ApiDetails;
 import de.skerkewitz.jcme.config.AppConfig;
@@ -12,6 +13,7 @@ import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.Descendant;
 import de.skerkewitz.jcme.model.Organization;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Space;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -64,8 +66,8 @@ class ConfluenceFetcherTest {
                  "homepage":{"id":"42"}}
                 """, Map.of());
 
-        Space first = fetcher.getSpace("MYKEY", server.baseUrl());
-        Space second = fetcher.getSpace("MYKEY", server.baseUrl());
+        Space first = fetcher.getSpace(de.skerkewitz.jcme.model.SpaceKey.of("MYKEY"), BaseUrl.of(server.baseUrl()));
+        Space second = fetcher.getSpace(de.skerkewitz.jcme.model.SpaceKey.of("MYKEY"), BaseUrl.of(server.baseUrl()));
 
         assertThat(first.name()).isEqualTo("My Space");
         assertThat(first.homepage()).isEqualTo(42L);
@@ -100,9 +102,9 @@ class ConfluenceFetcherTest {
         server.onGet("/rest/api/content/100/child/attachment", 200,
                 "{\"results\":[],\"size\":0}", Map.of());
 
-        Page p = fetcher.getPage(100, server.baseUrl());
+        Page p = fetcher.getPage(PageId.of(100), BaseUrl.of(server.baseUrl()));
 
-        assertThat(p.id()).isEqualTo(100);
+        assertThat(p.id()).isEqualTo(PageId.of(100));
         assertThat(p.title()).isEqualTo("My Page");
         assertThat(p.body()).isEqualTo("<p>view</p>");
         assertThat(p.bodyExport()).isEqualTo("<p>export</p>");
@@ -113,7 +115,7 @@ class ConfluenceFetcherTest {
         assertThat(p.ancestors()).hasSize(1);
         assertThat(p.ancestors().get(0).title()).isEqualTo("Parent");
         assertThat(p.version().number()).isEqualTo(7);
-        assertThat(p.space().key()).isEqualTo("KEY");
+        assertThat(p.space().key()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("KEY"));
     }
 
     @Test
@@ -129,8 +131,8 @@ class ConfluenceFetcherTest {
         server.onGet("/rest/api/content/200/child/attachment", 200,
                 "{\"results\":[],\"size\":0}", Map.of());
 
-        Page first = fetcher.getPage(200, server.baseUrl());
-        Page second = fetcher.getPage(200, server.baseUrl());
+        Page first = fetcher.getPage(PageId.of(200), BaseUrl.of(server.baseUrl()));
+        Page second = fetcher.getPage(PageId.of(200), BaseUrl.of(server.baseUrl()));
 
         assertThat(first).isSameAs(second);
         assertThat(server.hits("/rest/api/content/200")).isEqualTo(1);
@@ -140,10 +142,10 @@ class ConfluenceFetcherTest {
     void get_page_returns_inaccessible_sentinel_on_404() {
         server.onGet("/rest/api/content/9999", 404, "not found", Map.of());
 
-        Page p = fetcher.getPage(9999, server.baseUrl());
+        Page p = fetcher.getPage(PageId.of(9999), BaseUrl.of(server.baseUrl()));
 
         assertThat(p.isInaccessible()).isTrue();
-        assertThat(p.id()).isEqualTo(9999);
+        assertThat(p.id()).isEqualTo(PageId.of(9999));
     }
 
     @Test
@@ -166,7 +168,7 @@ class ConfluenceFetcherTest {
                 TestHttpServer.Response.of(200, partial.toString())));
         server.onGet("/rest/api/space/SP", 200, "{\"key\":\"SP\",\"name\":\"sp\"}", Map.of());
 
-        List<Attachment> result = fetcher.getAttachments(300, server.baseUrl());
+        List<Attachment> result = fetcher.getAttachments(PageId.of(300), BaseUrl.of(server.baseUrl()));
 
         assertThat(result).hasSize(53);
         assertThat(server.hits("/rest/api/content/300/child/attachment")).isEqualTo(2);
@@ -203,7 +205,8 @@ class ConfluenceFetcherTest {
                 TestHttpServer.Response.of(200, firstResponse),
                 TestHttpServer.Response.of(200, secondResponse)));
 
-        Page parent = new Page(server.baseUrl(), 100, "Parent", Space.empty(server.baseUrl()),
+        BaseUrl base = BaseUrl.of(server.baseUrl());
+        Page parent = new Page(base, PageId.of(100), "Parent", Space.empty(base),
                 List.of(), de.skerkewitz.jcme.model.Version.empty(),
                 "", "", "", List.of(), List.of());
 
@@ -221,10 +224,10 @@ class ConfluenceFetcherTest {
                 ]}
                 """, Map.of());
 
-        Organization org = fetcher.getOrganization(server.baseUrl());
+        Organization org = fetcher.getOrganization(BaseUrl.of(server.baseUrl()));
 
         assertThat(org.spaces()).hasSize(2);
-        assertThat(org.spaces()).extracting(Space::key).containsExactly("A", "B");
+        assertThat(org.spaces()).extracting(s -> s.key().value()).containsExactly("A", "B");
     }
 
     private static String makeAttachmentJson(String id, String mediaType, String fileId) {

@@ -1,11 +1,13 @@
 package de.skerkewitz.jcme.model;
 
+import de.skerkewitz.jcme.api.BaseUrl;
+
 import java.util.List;
 import java.util.Optional;
 
 public record Page(
-        String baseUrl,
-        long id,
+        BaseUrl baseUrl,
+        PageId id,
         String title,
         Space space,
         List<Ancestor> ancestors,
@@ -55,7 +57,7 @@ public record Page(
     }
 
     /** Build a sentinel "Page not accessible" page for fallbacks (mirrors the Python behavior). */
-    public static Page inaccessible(long pageId, String baseUrl) {
+    public static Page inaccessible(PageId pageId, BaseUrl baseUrl) {
         return new Page(
                 baseUrl,
                 pageId,

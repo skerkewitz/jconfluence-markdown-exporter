@@ -36,7 +36,7 @@ class JiraClientTest {
         server.onGet("/rest/api/2/issue/PROJ-1", 200,
                 "{\"key\":\"PROJ-1\",\"fields\":{\"summary\":\"hi\"}}", Map.of());
 
-        JsonNode issue = client.getIssue("PROJ-1");
+        JsonNode issue = client.getIssue(de.skerkewitz.jcme.model.IssueKey.of("PROJ-1"));
 
         assertThat(issue.get("key").asText()).isEqualTo("PROJ-1");
         assertThat(issue.get("fields").get("summary").asText()).isEqualTo("hi");
@@ -47,7 +47,7 @@ class JiraClientTest {
         server.onGet("/rest/api/2/issue/PROJ-1", 200, "irrelevant",
                 Map.of("X-Seraph-Loginreason", "AUTHENTICATED_FAILED"));
 
-        assertThatThrownBy(() -> client.getIssue("PROJ-1"))
+        assertThatThrownBy(() -> client.getIssue(de.skerkewitz.jcme.model.IssueKey.of("PROJ-1")))
                 .isInstanceOf(JiraAuthenticationException.class)
                 .hasMessageContaining("Jira authentication failed");
     }

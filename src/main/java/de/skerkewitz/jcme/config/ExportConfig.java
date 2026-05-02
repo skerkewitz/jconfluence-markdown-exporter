@@ -3,7 +3,7 @@ package de.skerkewitz.jcme.config;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
 public record ExportConfig(
-        @JsonProperty("log_level") String logLevel,
+        @JsonProperty("log_level") LogLevel logLevel,
         @JsonProperty("output_path") String outputPath,
         @JsonProperty("page_href") String pageHref,
         @JsonProperty("page_path") String pagePath,
@@ -29,7 +29,7 @@ public record ExportConfig(
 
     public static ExportConfig defaults() {
         return new ExportConfig(
-                "INFO",
+                LogLevel.INFO,
                 "",
                 "relative",
                 "{space_name}/{homepage_title}/{ancestor_titles}/{page_title}.md",

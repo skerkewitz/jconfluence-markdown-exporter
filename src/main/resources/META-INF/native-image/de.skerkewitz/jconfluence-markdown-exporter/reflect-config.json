@@ -17,6 +17,15 @@
     "queryAllPublicConstructors": true
   },
   {
+    "comment": "Secret wraps credential strings; deserialized via @JsonCreator factory.",
+    "name": "de.skerkewitz.jcme.config.Secret",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
     "name": "de.skerkewitz.jcme.config.AuthConfig",
     "allDeclaredFields": true,
     "queryAllDeclaredMethods": true,
@@ -75,6 +84,51 @@
   },
   {
     "name": "de.skerkewitz.jcme.lockfile.AttachmentEntry",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "PageId wrapper; deserialized via @JsonCreator from a JSON number.",
+    "name": "de.skerkewitz.jcme.model.PageId",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "BaseUrl wrapper; deserialized via @JsonCreator from a JSON string.",
+    "name": "de.skerkewitz.jcme.api.BaseUrl",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "SpaceKey wrapper; deserialized via @JsonCreator from a JSON string.",
+    "name": "de.skerkewitz.jcme.model.SpaceKey",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "IssueKey wrapper; deserialized via @JsonCreator from a JSON string.",
+    "name": "de.skerkewitz.jcme.model.IssueKey",
+    "allDeclaredFields": true,
+    "queryAllDeclaredMethods": true,
+    "queryAllPublicMethods": true,
+    "queryAllDeclaredConstructors": true,
+    "queryAllPublicConstructors": true
+  },
+  {
+    "comment": "LogLevel enum; deserialized via @JsonCreator from a JSON string (case-insensitive).",
+    "name": "de.skerkewitz.jcme.config.LogLevel",
     "allDeclaredFields": true,
     "queryAllDeclaredMethods": true,
     "queryAllPublicMethods": true,

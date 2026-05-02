@@ -1,6 +1,7 @@
 package de.skerkewitz.jcme.api;
 
 import com.fasterxml.jackson.databind.JsonNode;
+import de.skerkewitz.jcme.model.PageId;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
@@ -33,7 +34,7 @@ public class ConfluenceClient extends RestClient {
         return getJson("/rest/api/space/" + encode(spaceKey), params);
     }
 
-    public JsonNode getPageById(long pageId, String expand) {
+    public JsonNode getPageById(PageId pageId, String expand) {
         Map<String, Object> params = new LinkedHashMap<>();
         if (expand != null) params.put("expand", expand);
         return getJson("/rest/api/content/" + pageId, params);
@@ -48,7 +49,7 @@ public class ConfluenceClient extends RestClient {
         return getJson("/rest/api/content", params);
     }
 
-    public JsonNode getAttachmentsFromContent(long pageId, int start, int limit, String expand) {
+    public JsonNode getAttachmentsFromContent(PageId pageId, int start, int limit, String expand) {
         Map<String, Object> params = new LinkedHashMap<>();
         params.put("start", start);
         params.put("limit", limit);

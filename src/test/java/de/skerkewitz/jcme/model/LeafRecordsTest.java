@@ -76,15 +76,16 @@ class LeafRecordsTest {
                     "status": {"name": "In Progress"}
                 }}
                 """));
-        assertThat(issue.key()).isEqualTo("PROJ-1");
+        assertThat(issue.key()).isEqualTo(IssueKey.of("PROJ-1"));
         assertThat(issue.summary()).isEqualTo("Fix bug");
         assertThat(issue.status()).isEqualTo("In Progress");
     }
 
     @Test
     void jira_issue_handles_missing_fields() throws Exception {
+        // Malformed key "K" → tryParse returns empty → JiraIssue.key() is null.
         JiraIssue issue = JiraIssue.fromJson(parse("{\"key\":\"K\"}"));
-        assertThat(issue.key()).isEqualTo("K");
+        assertThat(issue.key()).isNull();
         assertThat(issue.summary()).isEmpty();
         assertThat(issue.status()).isEmpty();
     }

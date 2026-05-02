@@ -50,7 +50,7 @@ class InteractiveMenuTest {
 
         menu.editKey("export.log_level");
 
-        assertThat(store.load().export().logLevel()).isEqualTo("DEBUG");
+        assertThat(store.load().export().logLevel()).isEqualTo(de.skerkewitz.jcme.config.LogLevel.DEBUG);
         assertThat(out.toString()).contains("Saved");
     }
 
@@ -121,7 +121,7 @@ class InteractiveMenuTest {
         assertThat(loaded.auth().confluence()).containsKey("https://x.atlassian.net");
         assertThat(loaded.auth().confluence().get("https://x.atlassian.net").username())
                 .isEqualTo("alice@example.com");
-        assertThat(loaded.auth().confluence().get("https://x.atlassian.net").apiToken())
+        assertThat(loaded.auth().confluence().get("https://x.atlassian.net").apiToken().reveal())
                 .isEqualTo("tok");
     }
 

@@ -1,5 +1,6 @@
 package de.skerkewitz.jcme.api;
 
+import de.skerkewitz.jcme.model.PageId;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -62,8 +63,8 @@ class UrlParsingTest {
     void parses_cloud_url_with_pageid_and_title() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/wiki/spaces/KEY/pages/123456789/Page+Title");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("KEY");
-        assertThat(ref.get().pageId()).isEqualTo(123456789L);
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("KEY"));
+        assertThat(ref.get().pageId()).isEqualTo(PageId.of(123456789L));
         assertThat(ref.get().pageTitle()).isEqualTo("Page Title");
     }
 
@@ -71,7 +72,7 @@ class UrlParsingTest {
     void parses_cloud_url_with_only_space_key() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/wiki/spaces/MYSPACE");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("MYSPACE");
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("MYSPACE"));
         assertThat(ref.get().pageId()).isNull();
         assertThat(ref.get().pageTitle()).isNull();
     }
@@ -80,8 +81,8 @@ class UrlParsingTest {
     void parses_cloud_url_with_pageid_no_title() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/wiki/spaces/KEY/pages/42");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("KEY");
-        assertThat(ref.get().pageId()).isEqualTo(42L);
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("KEY"));
+        assertThat(ref.get().pageId()).isEqualTo(PageId.of(42L));
         assertThat(ref.get().pageTitle()).isNull();
     }
 
@@ -90,8 +91,8 @@ class UrlParsingTest {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath(
                 "/ex/confluence/cloud-id/wiki/spaces/KEY/pages/42/Title");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("KEY");
-        assertThat(ref.get().pageId()).isEqualTo(42L);
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("KEY"));
+        assertThat(ref.get().pageId()).isEqualTo(PageId.of(42L));
         assertThat(ref.get().pageTitle()).isEqualTo("Title");
     }
 
@@ -101,7 +102,7 @@ class UrlParsingTest {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/wiki/spaces/KEY/pages/123/Title/edit");
         // The trailing "/edit" segment is matched and discarded by the regex
         assertThat(ref).isPresent();
-        assertThat(ref.get().pageId()).isEqualTo(123L);
+        assertThat(ref.get().pageId()).isEqualTo(PageId.of(123L));
         assertThat(ref.get().pageTitle()).isEqualTo("Title");
     }
 
@@ -111,7 +112,7 @@ class UrlParsingTest {
     void parses_server_long_url() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/display/SPACEKEY/Page+Title");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("SPACEKEY");
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("SPACEKEY"));
         assertThat(ref.get().pageTitle()).isEqualTo("Page Title");
         assertThat(ref.get().pageId()).isNull();
     }
@@ -120,7 +121,7 @@ class UrlParsingTest {
     void parses_server_short_url() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/SPACEKEY/Page+Title");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("SPACEKEY");
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("SPACEKEY"));
         assertThat(ref.get().pageTitle()).isEqualTo("Page Title");
     }
 
@@ -128,7 +129,7 @@ class UrlParsingTest {
     void parses_server_space_only() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/SPACEKEY");
         assertThat(ref).isPresent();
-        assertThat(ref.get().spaceKey()).isEqualTo("SPACEKEY");
+        assertThat(ref.get().spaceKey()).isEqualTo(de.skerkewitz.jcme.model.SpaceKey.of("SPACEKEY"));
         assertThat(ref.get().pageTitle()).isNull();
     }
 
@@ -142,23 +143,23 @@ class UrlParsingTest {
     void normalizes_trailing_slash() {
         Optional<ConfluenceRef> ref = UrlParsing.parseConfluencePath("/wiki/spaces/KEY/pages/123/Title/");
         assertThat(ref).isPresent();
-        assertThat(ref.get().pageId()).isEqualTo(123L);
+        assertThat(ref.get().pageId()).isEqualTo(PageId.of(123L));
     }
 
     // --- pageId query param ---
 
     @Test
     void extracts_pageid_query_param() {
-        Optional<Long> id = UrlParsing.extractPageIdQueryParam(
+        Optional<PageId> id = UrlParsing.extractPageIdQueryParam(
                 "https://wiki.company.com/pages/viewpage.action?pageId=987654");
-        assertThat(id).hasValue(987654L);
+        assertThat(id).hasValue(PageId.of(987654L));
     }
 
     @Test
     void pageid_query_param_is_case_insensitive() {
-        Optional<Long> id = UrlParsing.extractPageIdQueryParam(
+        Optional<PageId> id = UrlParsing.extractPageIdQueryParam(
                 "https://wiki.company.com/pages/viewpage.action?PAGEID=42");
-        assertThat(id).hasValue(42L);
+        assertThat(id).hasValue(PageId.of(42L));
     }
 
     @Test

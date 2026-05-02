@@ -1,5 +1,8 @@
 package de.skerkewitz.jcme.api;
 
+import de.skerkewitz.jcme.model.PageId;
+import de.skerkewitz.jcme.model.SpaceKey;
+
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URLDecoder;
@@ -116,7 +119,7 @@ public final class UrlParsing {
     }
 
     /** Extract the {@code pageId} query param from a URL. Case-insensitive on key. */
-    public static Optional<Long> extractPageIdQueryParam(String url) {
+    public static Optional<PageId> extractPageIdQueryParam(String url) {
         try {
             URI uri = new URI(url);
             String query = uri.getRawQuery();
@@ -128,8 +131,8 @@ public final class UrlParsing {
                 if (!key.equalsIgnoreCase("pageid")) continue;
                 String value = URLDecoder.decode(pair.substring(eq + 1), StandardCharsets.UTF_8);
                 try {
-                    return Optional.of(Long.parseLong(value));
-                } catch (NumberFormatException ignored) {
+                    return Optional.of(PageId.parse(value));
+                } catch (IllegalArgumentException ignored) {
                     return Optional.empty();
                 }
             }
@@ -214,11 +217,16 @@ public final class UrlParsing {
     }
 
     private static ConfluenceRef refFromMatcher(Matcher m) {
-        String spaceKey = decodePart(group(m, "spaceKey"));
+        String rawSpaceKey = decodePart(group(m, "spaceKey"));
+        SpaceKey spaceKey = rawSpaceKey == null ? null : tryParseSpaceKey(rawSpaceKey);
         String pageIdStr = group(m, "pageId");
-        Long pageId = pageIdStr == null ? null : Long.parseLong(pageIdStr);
+        PageId pageId = pageIdStr == null ? null : PageId.parse(pageIdStr);
         String pageTitle = decodePart(group(m, "pageTitle"));
         return new ConfluenceRef(spaceKey, pageId, pageTitle);
+    }
+
+    private static SpaceKey tryParseSpaceKey(String s) {
+        try { return SpaceKey.of(s); } catch (IllegalArgumentException e) { return null; }
     }
 
     private static String group(Matcher m, String name) {

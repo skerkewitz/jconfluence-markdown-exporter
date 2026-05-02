@@ -12,21 +12,26 @@ import com.fasterxml.jackson.annotation.JsonProperty;
  */
 public record ApiDetails(
         @JsonProperty("username") String username,
-        @JsonProperty("api_token") String apiToken,
-        @JsonProperty("pat") String pat,
+        @JsonProperty("api_token") Secret apiToken,
+        @JsonProperty("pat") Secret pat,
         @JsonProperty("cloud_id") String cloudId,
         @JsonProperty("api_url") String apiUrl
 ) {
     public static ApiDetails empty() {
-        return new ApiDetails("", "", "", "", "");
+        return new ApiDetails("", Secret.EMPTY, Secret.EMPTY, "", "");
     }
 
-    public ApiDetails {
-        username = stripNewlines(username);
-        apiToken = stripNewlines(apiToken);
-        pat = stripNewlines(pat);
-        cloudId = cloudId == null ? "" : cloudId;
-        apiUrl = apiUrl == null ? "" : apiUrl.trim();
+    public ApiDetails(String username, Secret apiToken, Secret pat, String cloudId, String apiUrl) {
+        this.username = stripNewlines(username);
+        this.apiToken = stripSecret(apiToken);
+        this.pat = stripSecret(pat);
+        this.cloudId = cloudId == null ? "" : cloudId;
+        this.apiUrl = apiUrl == null ? "" : apiUrl.trim();
+    }
+
+    /** Convenience constructor for callers (and tests) that hold raw credential strings. */
+    public ApiDetails(String username, String apiToken, String pat, String cloudId, String apiUrl) {
+        this(username, Secret.of(apiToken), Secret.of(pat), cloudId, apiUrl);
     }
 
     /** Compact 4-arg constructor kept for source compatibility with older call-sites and tests. */
@@ -37,5 +42,11 @@ public record ApiDetails(
     private static String stripNewlines(String value) {
         if (value == null) return "";
         return value.replace("\r", "").replace("\n", "");
+    }
+
+    private static Secret stripSecret(Secret value) {
+        if (value == null) return Secret.EMPTY;
+        String stripped = stripNewlines(value.reveal());
+        return Secret.of(stripped);
     }
 }

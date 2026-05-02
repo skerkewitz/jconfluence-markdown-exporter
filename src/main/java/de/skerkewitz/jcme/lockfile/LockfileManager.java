@@ -5,6 +5,7 @@ import de.skerkewitz.jcme.export.FileIO;
 import de.skerkewitz.jcme.markdown.RenderingContext;
 import de.skerkewitz.jcme.model.ExportablePage;
 import de.skerkewitz.jcme.model.Page;
+import de.skerkewitz.jcme.model.PageId;
 import de.skerkewitz.jcme.model.Version;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,9 +57,9 @@ public final class LockfileManager {
     public Path lockfilePath() { return lockfilePath; }
 
     /** Return any attachment entries previously recorded for the page, or empty. */
-    public Map<String, AttachmentEntry> attachmentEntriesForPage(String pageId) {
+    public Map<String, AttachmentEntry> attachmentEntriesForPage(PageId pageId) {
         if (!enabled) return Map.of();
-        PageEntry entry = lock.getPage(pageId);
+        PageEntry entry = lock.getPage(pageId.toString());
         return entry != null ? entry.attachments() : Map.of();
     }
 
@@ -76,13 +77,15 @@ public final class LockfileManager {
             String exportPath = rc.pageExportPath(page).toString().replace('\\', '/');
             PageEntry entry = new PageEntry(page.title(), v.number(), exportPath,
                     attachmentEntries == null ? new LinkedHashMap<>() : attachmentEntries);
-            lock.putPage(page.baseUrl(), page.space().key(), String.valueOf(page.id()), entry);
+            String spaceKeyForLock = page.space() != null && page.space().key() != null
+                    ? page.space().key().value() : "";
+            lock.putPage(page.baseUrl().value(), spaceKeyForLock, page.id().toString(), entry);
             try {
                 lock.save(lockfilePath, null);
             } catch (IOException e) {
                 LOG.warn("Failed to save lockfile {}: {}", lockfilePath, e.getMessage());
             }
-            seenPageIds.add(String.valueOf(page.id()));
+            seenPageIds.add(page.id().toString());
         } finally {
             writeLock.unlock();
         }
@@ -91,12 +94,12 @@ public final class LockfileManager {
     /** Mark page ids as seen in this run (so they're excluded from stale cleanup). */
     public void markSeen(Iterable<? extends ExportablePage> pages) {
         if (!enabled) return;
-        for (ExportablePage p : pages) seenPageIds.add(String.valueOf(p.id()));
+        for (ExportablePage p : pages) seenPageIds.add(p.id().toString());
     }
 
-    public void markSeenIds(Iterable<Long> ids) {
+    public void markSeenIds(Iterable<PageId> ids) {
         if (!enabled) return;
-        for (Long id : ids) seenPageIds.add(String.valueOf(id));
+        for (PageId id : ids) seenPageIds.add(id.toString());
     }
 
     /**
@@ -105,7 +108,7 @@ public final class LockfileManager {
      */
     public boolean shouldExport(ExportablePage page, Path resolvedExportPath) {
         if (!enabled) return true;
-        String pageId = String.valueOf(page.id());
+        String pageId = page.id().toString();
         PageEntry entry = lock.getPage(pageId);
         if (entry == null) {
             LOG.debug("Page id={} not in lockfile — will export", pageId);
@@ -130,18 +133,26 @@ public final class LockfileManager {
     }
 
     /** Return lockfile page IDs that were not encountered during this run. */
-    public Set<String> unseenIds() {
+    public Set<PageId> unseenIds() {
         if (!enabled) return Set.of();
         Set<String> all = new HashSet<>(lock.allPages().keySet());
         all.removeAll(seenPageIds);
-        return all;
+        Set<PageId> result = new HashSet<>(all.size());
+        for (String s : all) {
+            try {
+                result.add(PageId.parse(s));
+            } catch (IllegalArgumentException e) {
+                LOG.warn("Skipping unparseable page id in lockfile: {}", s);
+            }
+        }
+        return result;
     }
 
     /**
      * Delete files + lockfile entries for pages confirmed deleted from Confluence,
      * plus orphan files for pages whose export-path moved. Updates the supplied stats.
      */
-    public void removePages(Set<String> deletedIds, ExportStats stats) {
+    public void removePages(Set<PageId> deletedIds, ExportStats stats) {
         if (!enabled) return;
         Set<String> toDelete = new HashSet<>();
 
@@ -155,12 +166,13 @@ public final class LockfileManager {
             }
         }
 
-        for (String pageId : deletedIds) {
-            PageEntry entry = lock.getPage(pageId);
+        for (PageId pageId : deletedIds) {
+            String key = pageId.toString();
+            PageEntry entry = lock.getPage(key);
             if (entry != null) {
                 FileIO.deleteIfExists(outputPath.resolve(entry.exportPath()));
                 LOG.info("Deleted removed page: {}", entry.exportPath());
-                toDelete.add(pageId);
+                toDelete.add(key);
             }
         }
 

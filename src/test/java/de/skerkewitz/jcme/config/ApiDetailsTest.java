@@ -54,4 +54,24 @@ class ApiDetailsTest {
         String json = JSON.writeValueAsString(d);
         assertThat(json).contains("\"api_url\":\"https://api.host\"");
     }
+
+    @Test
+    void to_string_does_not_leak_credentials() {
+        ApiDetails d = new ApiDetails("alice", "leaky-token", "leaky-pat", "", "");
+        String s = d.toString();
+        assertThat(s).doesNotContain("leaky-token");
+        assertThat(s).doesNotContain("leaky-pat");
+    }
+
+    @Test
+    void api_token_round_trips_as_raw_string_for_wire_compat() throws Exception {
+        ApiDetails d = new ApiDetails("alice", "tok", "pat-val", "", "");
+        String json = JSON.writeValueAsString(d);
+        assertThat(json).contains("\"api_token\":\"tok\"");
+        assertThat(json).contains("\"pat\":\"pat-val\"");
+
+        ApiDetails parsed = JSON.readValue(json, ApiDetails.class);
+        assertThat(parsed.apiToken().reveal()).isEqualTo("tok");
+        assertThat(parsed.pat().reveal()).isEqualTo("pat-val");
+    }
 }

@@ -45,9 +45,9 @@ public final class ApiClientFactory {
      * Get (or create and cache) a Confluence client for the given base URL.
      * Throws {@link AuthNotConfiguredException} if no credentials are configured.
      */
-    public ConfluenceClient getConfluence(String url) {
+    public ConfluenceClient getConfluence(BaseUrl url) {
         String normalized = UrlParsing.normalizeInstanceUrl(
-                UrlParsing.ensureServiceGatewayUrl(url, "confluence"));
+                UrlParsing.ensureServiceGatewayUrl(url.value(), "confluence"));
         ConfluenceClient cached = confluence.get(normalized);
         if (cached != null) return cached;
 
@@ -103,9 +103,9 @@ public final class ApiClientFactory {
      * Get (or create and cache) a Jira client for the given base URL.
      * If {@code url} is a Confluence gateway URL, it is auto-converted to the Jira gateway URL.
      */
-    public JiraClient getJira(String url) {
+    public JiraClient getJira(BaseUrl url) {
         String normalized = UrlParsing.normalizeInstanceUrl(
-                UrlParsing.ensureServiceGatewayUrl(url, "jira"));
+                UrlParsing.ensureServiceGatewayUrl(url.value(), "jira"));
         AppConfig settings = configStore.loadEffective();
         if (!settings.export().enableJiraEnrichment()) {
             throw new IllegalStateException(
@@ -155,12 +155,12 @@ public final class ApiClientFactory {
         return jira.computeIfAbsent(normalized, k -> client);
     }
 
-    public void invalidateConfluence(String url) {
-        confluence.remove(UrlParsing.normalizeInstanceUrl(url));
+    public void invalidateConfluence(BaseUrl url) {
+        confluence.remove(UrlParsing.normalizeInstanceUrl(url.value()));
     }
 
-    public void invalidateJira(String url) {
-        jira.remove(UrlParsing.normalizeInstanceUrl(url));
+    public void invalidateJira(BaseUrl url) {
+        jira.remove(UrlParsing.normalizeInstanceUrl(url.value()));
     }
 
     /** Try to fetch the Atlassian Cloud ID from {@code _edge/tenant_info}. */
