@@ -1,5 +1,7 @@
 # jconfluence-markdown-exporter
 
+[![Maven Package](https://github.com/skerkewitz/jconfluence-markdown-exporter/actions/workflows/maven-publish.yml/badge.svg)](https://github.com/skerkewitz/jconfluence-markdown-exporter/actions/workflows/maven-publish.yml)
+
 A Java port of [confluence-markdown-exporter](https://github.com/Spenhouet/confluence-markdown-exporter)
 by Sebastian Penhouet. Exports Confluence pages, page trees, spaces, or whole organizations
 to Markdown files for Obsidian, GitHub, Azure DevOps, Foam, Dendron, and similar tools.
