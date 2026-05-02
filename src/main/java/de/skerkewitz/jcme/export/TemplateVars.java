@@ -46,8 +46,14 @@ public final class TemplateVars {
         Map<String, String> vars = base(attachment, fetcher);
         vars.put("attachment_id", attachment.id());
         vars.put("attachment_title", sanitizer.sanitize(attachment.titleWithoutExtension()));
-        // file_id is a GUID — no sanitization needed.
-        vars.put("attachment_file_id", attachment.fileId());
+        String fileKey = attachment.fileId();
+        if (fileKey == null || fileKey.isBlank()) {
+            fileKey = attachment.id();
+        }
+        if (fileKey == null || fileKey.isBlank()) {
+            fileKey = sanitizer.sanitize(attachment.titleWithoutExtension());
+        }
+        vars.put("attachment_file_id", fileKey == null ? "" : fileKey);
         vars.put("attachment_extension", attachment.extension());
         return vars;
     }

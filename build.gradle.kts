@@ -5,7 +5,7 @@ plugins {
     // See https://graalvm.github.io/native-build-tools/latest/gradle-plugin.html
     id("org.graalvm.buildtools.native") version "0.10.4"
 }
-
+How
 group = "de.skerkewitz"
 version = "0.1.0-SNAPSHOT"
 

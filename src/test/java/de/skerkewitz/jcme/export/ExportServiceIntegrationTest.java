@@ -163,6 +163,85 @@ class ExportServiceIntegrationTest {
     }
 
     @Test
+    void downloads_attachments_referenced_via_export_view_download_url() throws Exception {
+        server.onGet("/rest/api/space/K", 200,
+                "{\"key\":\"K\",\"name\":\"Space\",\"homepage\":{\"id\":\"1\"}}", Map.of());
+        server.onGet("/rest/api/content/201", 200, """
+                {"id":"201","title":"WithExportViewImage",
+                 "_expandable":{"space":"/rest/api/space/K"},
+                 "ancestors":[],"metadata":{"labels":{"results":[]}},
+                 "body":{"view":{"value":"<p>No file id in view</p>"},
+                         "export_view":{"value":"<p><img src=\\"/wiki/download/attachments/201/My%20Image.png\\"/></p>"},
+                         "editor2":{"value":""}},
+                 "version":{"number":1}}
+                """, Map.of());
+        server.onGet("/rest/api/content/201/child/attachment", 200, """
+                {"results":[
+                  {"id":"att201","title":"My Image.png",
+                   "_expandable":{"space":"/rest/api/space/K"},
+                   "extensions":{"fileSize":3,"mediaType":"image/png","fileId":"file-guid-201","comment":""},
+                                                                         "_links":{"download":"/wiki/download/attachments/201/My%20Image.png"},
+                   "container":{"id":"201","title":"P","ancestors":[],"_expandable":{"space":"/rest/api/space/K"}},
+                   "version":{"number":1}}
+                 ],"size":1}
+                """, Map.of());
+        server.onGet("/wiki/download/attachments/201/My Image.png", 200, "PNG", Map.of());
+
+        ExportService service = new ExportService(configStore);
+        ExportStats stats = service.exportPages(List.of(
+                server.baseUrl() + "/wiki/spaces/K/pages/201/X"));
+
+        assertThat(stats.exported()).isEqualTo(1);
+        assertThat(stats.attachmentsExported()).isEqualTo(1);
+        Path attFile = output.resolve("Space/attachments/file-guid-201.png");
+        assertThat(Files.exists(attFile)).isTrue();
+        assertThat(Files.readString(attFile)).isEqualTo("PNG");
+    }
+
+    @Test
+    void markdown_image_reference_uses_local_attachment_path_when_file_id_missing() throws Exception {
+        server.onGet("/rest/api/space/K", 200,
+                "{\"key\":\"K\",\"name\":\"Space\",\"homepage\":{\"id\":\"1\"}}", Map.of());
+        server.onGet("/rest/api/content/202", 200, """
+                {"id":"202","title":"WithMissingFileId",
+                 "_expandable":{"space":"/rest/api/space/K"},
+                 "ancestors":[],"metadata":{"labels":{"results":[]}},
+                 "body":{"view":{"value":"<p><img src=\\"/wiki/download/attachments/202/My%20Image.png?version=1\\" alt=\\"img\\"/></p>"},
+                         "export_view":{"value":""},
+                         "editor2":{"value":""}},
+                 "version":{"number":1}}
+                """, Map.of());
+        server.onGet("/rest/api/content/202/child/attachment", 200, """
+                {"results":[
+                  {"id":"att202","title":"My Image.png",
+                   "_expandable":{"space":"/rest/api/space/K"},
+                   "extensions":{"fileSize":3,"mediaType":"image/png","fileId":"","comment":""},
+                   "_links":{"download":"/wiki/download/attachments/202/My%20Image.png?version=1"},
+                   "container":{"id":"202","title":"P","ancestors":[],"_expandable":{"space":"/rest/api/space/K"}},
+                   "version":{"number":1}}
+                 ],"size":1}
+                """, Map.of());
+        server.onGet("/wiki/download/attachments/202/My Image.png", 200, "PNG", Map.of());
+
+        ExportService service = new ExportService(configStore);
+        ExportStats stats = service.exportPages(List.of(
+                server.baseUrl() + "/wiki/spaces/K/pages/202/X"));
+
+        assertThat(stats.exported()).isEqualTo(1);
+        assertThat(stats.attachmentsExported()).isEqualTo(1);
+
+        Path mdFile = output.resolve("Space/WithMissingFileId.md");
+        String markdown = Files.readString(mdFile);
+        assertThat(markdown).contains("att202.png");
+        assertThat(markdown).doesNotContain("attachments/.png");
+        assertThat(markdown).doesNotContain("download/attachments/");
+
+        Path attFile = output.resolve("Space/attachments/att202.png");
+        assertThat(Files.exists(attFile)).isTrue();
+        assertThat(Files.readString(attFile)).isEqualTo("PNG");
+    }
+
+    @Test
     void cleans_up_pages_no_longer_in_confluence() throws Exception {
         server.onGet("/rest/api/space/K", 200,
                 "{\"key\":\"K\",\"name\":\"Space\",\"homepage\":{\"id\":\"1\"}}", Map.of());

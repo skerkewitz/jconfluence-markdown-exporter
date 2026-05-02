@@ -45,4 +45,6 @@ bin/
 /org_project/
 
 target/
+gradle/
+
 

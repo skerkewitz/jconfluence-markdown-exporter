@@ -229,6 +229,39 @@ class ConfluencePageConverterTest {
         assertThat(md).contains("[file](http://example.com/file.pdf)");
     }
 
+        @Test
+        void attachment_image_resolves_from_download_url_when_file_id_is_missing() {
+        Space s = space("K", "K", null);
+        Attachment a = new Attachment(BASE_URL, "att201", "My Image.png", s, List.of(),
+            Version.empty(), 0, "image/png", "", "", "",
+            "/wiki/download/attachments/201/My%20Image.png?version=1", "");
+        Page p = new Page(BASE_URL, PageId.of(1), "P", s, List.of(), Version.empty(),
+            "", "", "", List.of(), List.of(a));
+
+        String md = convert(p, "<img src=\"/wiki/download/attachments/201/My%20Image.png?version=1\" alt=\"img\">");
+
+        assertThat(md).contains("![img]");
+        assertThat(md).contains("att201.png");
+        assertThat(md).doesNotContain("/.png");
+        assertThat(md).doesNotContain("download/attachments");
+        }
+
+        @Test
+        void attachment_link_resolves_from_download_url_when_file_id_is_missing() {
+        Space s = space("K", "K", null);
+        Attachment a = new Attachment(BASE_URL, "att202", "Doc.pdf", s, List.of(),
+            Version.empty(), 0, "application/pdf", "", "", "",
+            "/wiki/download/attachments/201/Doc.pdf?version=1", "");
+        Page p = new Page(BASE_URL, PageId.of(1), "P", s, List.of(), Version.empty(),
+            "", "", "", List.of(), List.of(a));
+
+        String md = convert(p, "<a href=\"/wiki/download/attachments/201/Doc.pdf?version=1\">Doc</a>");
+
+        assertThat(md).contains("[Doc]");
+        assertThat(md).contains("att202.pdf");
+        assertThat(md).doesNotContain("download/attachments");
+        }
+
     // ---------- Emoticon ----------
 
     @Test

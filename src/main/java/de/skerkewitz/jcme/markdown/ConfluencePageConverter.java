@@ -136,6 +136,10 @@ public class ConfluencePageConverter extends MarkdownConverter {
             String link = convertAttachmentLink(el, text);
             if (link != null) return link;
         }
+        Optional<Attachment> byHref = findAttachmentByUrl(href);
+        if (byHref.isPresent()) {
+            return renderAttachmentLink(byHref.get(), text);
+        }
         Optional<de.skerkewitz.jcme.api.ConfluenceRef> ref = UrlParsing.parseConfluencePath(href);
         if (ref.isPresent() && ref.get().pageId() != null) {
             return convertPageLink(ref.get().pageId());
@@ -184,15 +188,22 @@ public class ConfluencePageConverter extends MarkdownConverter {
 
     private String convertAttachmentLink(Element el, String text) {
         Optional<Attachment> attachment = findReferencedAttachment(el);
+        if (attachment.isEmpty()) {
+            attachment = findAttachmentByUrl(el.attr("href"));
+        }
         if (attachment.isEmpty()) return null;
-        Attachment a = attachment.get();
+        return renderAttachmentLink(attachment.get(), text);
+    }
+
+    private String renderAttachmentLink(Attachment a, String text) {
+        String title = text == null || text.isBlank() ? a.title() : text;
         if (ctx.attachmentHref() == HrefResolver.Style.WIKI) {
-            return "[[" + ctx.attachmentExportPath(a).getFileName() + "|" + a.title() + "]]";
+            return "[[" + ctx.attachmentExportPath(a).getFileName() + "|" + title + "]]";
         }
         Path target = ctx.attachmentExportPath(a);
         Path current = ctx.pageExportPath(ctx.page());
         String href = HrefResolver.encodeSpaces(HrefResolver.resolve(target, current, ctx.attachmentHref()));
-        return "[" + a.title() + "](" + href + ")";
+        return "[" + title + "](" + href + ")";
     }
 
     private Optional<Attachment> findReferencedAttachment(Element el) {
@@ -216,6 +227,9 @@ public class ConfluencePageConverter extends MarkdownConverter {
 
         Optional<Attachment> attachment = findReferencedAttachment(el);
         String src = el.attr("src");
+        if (attachment.isEmpty()) {
+            attachment = findAttachmentByUrl(src);
+        }
 
         if (src.contains(".drawio.png")) {
             String filename = decode(src.substring(src.lastIndexOf('/') + 1));
@@ -245,6 +259,32 @@ public class ConfluencePageConverter extends MarkdownConverter {
         Path current = ctx.pageExportPath(ctx.page());
         String href = HrefResolver.encodeSpaces(HrefResolver.resolve(target, current, ctx.attachmentHref()));
         return "![" + (alt == null ? "" : alt) + "](" + href + ")";
+    }
+
+    private Optional<Attachment> findAttachmentByUrl(String url) {
+        if (url == null || url.isBlank()) return Optional.empty();
+        String decoded = decode(url);
+        String normalizedUrl = stripQueryAndFragment(decoded);
+        for (Attachment a : ctx.page().attachments()) {
+            String dl = stripQueryAndFragment(decode(a.downloadLink()));
+            if (!dl.isEmpty() && normalizedUrl.contains(dl)) {
+                return Optional.of(a);
+            }
+            int slash = normalizedUrl.lastIndexOf('/');
+            String lastSegment = slash >= 0 ? normalizedUrl.substring(slash + 1) : normalizedUrl;
+            if (!a.title().isEmpty() && decode(lastSegment).equals(a.title())) {
+                return Optional.of(a);
+            }
+        }
+        return Optional.empty();
+    }
+
+    private static String stripQueryAndFragment(String s) {
+        if (s == null) return "";
+        int q = s.indexOf('?');
+        String base = q >= 0 ? s.substring(0, q) : s;
+        int hash = base.indexOf('#');
+        return hash >= 0 ? base.substring(0, hash) : base;
     }
 
     private String convertEmoticon(Element el) {

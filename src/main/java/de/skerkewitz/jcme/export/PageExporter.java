@@ -10,15 +10,22 @@ import de.skerkewitz.jcme.markdown.PageRenderer;
 import de.skerkewitz.jcme.markdown.RenderingContext;
 import de.skerkewitz.jcme.model.Attachment;
 import de.skerkewitz.jcme.model.Page;
+import org.jsoup.Jsoup;
+import org.jsoup.nodes.Document;
+import org.jsoup.nodes.Element;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
+import java.net.URLDecoder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Single-page export pipeline:
@@ -144,6 +151,7 @@ public final class PageExporter {
         java.util.List<Attachment> out = new java.util.ArrayList<>();
         String body = page.body() == null ? "" : page.body();
         String bodyExport = page.bodyExport() == null ? "" : page.bodyExport();
+        Set<String> linkTargets = extractAttachmentLikeTargets(body, bodyExport);
         for (Attachment a : page.attachments()) {
             String name = a.filename();
             if (name.endsWith(".drawio") && body.contains("diagramName=" + a.title())) {
@@ -157,8 +165,68 @@ public final class PageExporter {
             }
             if (a.fileId() != null && !a.fileId().isEmpty() && body.contains(a.fileId())) {
                 out.add(a);
+                continue;
+            }
+            if (a.fileId() != null && !a.fileId().isEmpty() && bodyExport.contains(a.fileId())) {
+                out.add(a);
+                continue;
+            }
+            if (isReferencedByDownloadUrl(a, linkTargets)) {
+                out.add(a);
             }
         }
         return out;
+    }
+
+    private static Set<String> extractAttachmentLikeTargets(String... htmlSnippets) {
+        Set<String> out = new LinkedHashSet<>();
+        for (String html : htmlSnippets) {
+            if (html == null || html.isBlank()) continue;
+            Document doc = Jsoup.parseBodyFragment(html);
+            for (Element el : doc.select("img[src],a[href]")) {
+                String url = el.hasAttr("src") ? el.attr("src") : el.attr("href");
+                if (url == null || url.isBlank()) continue;
+                String decoded = decode(url);
+                if (looksLikeConfluenceAttachmentUrl(decoded)) {
+                    out.add(decoded);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static boolean isReferencedByDownloadUrl(Attachment a, Set<String> urls) {
+        if (urls.isEmpty()) return false;
+        String title = decode(a.title());
+        String download = stripQuery(decode(a.downloadLink()));
+        for (String raw : urls) {
+            String url = stripQuery(raw);
+            if (!looksLikeConfluenceAttachmentUrl(url)) continue;
+            if (!download.isEmpty() && url.contains(download)) return true;
+            int slash = url.lastIndexOf('/');
+            String last = slash >= 0 ? url.substring(slash + 1) : url;
+            if (!title.isEmpty() && decode(last).equals(title)) return true;
+        }
+        return false;
+    }
+
+    private static boolean looksLikeConfluenceAttachmentUrl(String url) {
+        String lower = url.toLowerCase();
+        return lower.contains("/download/attachments/") || lower.contains("/download/thumbnails/");
+    }
+
+    private static String stripQuery(String s) {
+        if (s == null) return "";
+        int q = s.indexOf('?');
+        return q >= 0 ? s.substring(0, q) : s;
+    }
+
+    private static String decode(String s) {
+        if (s == null || s.isEmpty()) return "";
+        try {
+            return URLDecoder.decode(s, StandardCharsets.UTF_8);
+        } catch (IllegalArgumentException ignored) {
+            return s;
+        }
     }
 }

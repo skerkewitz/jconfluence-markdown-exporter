@@ -141,7 +141,7 @@ public final class InteractiveMenu {
                 currentSecret(service, url, "cloud_id"));
         String apiUrl   = prompt.text(
                 "REST API URL (only set if the API is on a different host than the page URL; "
-                        + "e.g. https://confluencews.example.com)",
+                + "e.g. https://api.your-company.tld)",
                 currentSecret(service, url, "api_url"));
 
         try {
